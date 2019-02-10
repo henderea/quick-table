@@ -1,0 +1,26 @@
+{
+  "name": "@henderea/quick-table",
+  "version": "0.0.1",
+  "description": "A simplified clone of DataTables.net",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "repository": "git@github.com:henderea/quick-table.git",
+  "author": "Eric Henderson <henderea@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jquery": "^3.3.29",
+    "@types/lodash": "^4.14.120",
+    "typescript": "^3.3.3"
+  },
+  "peerDependencies": {
+    "jquery": "3.x",
+    "lodash": "4.x"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "yarn build"
+  },
+  "files": [
+    "lib/**/*"
+  ]
+}
