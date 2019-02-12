@@ -577,5 +577,7 @@ export default ($: JQuery, _: LoDashStatic) => {
         return tables;
     }
 
-    return { columnId, rowId, cellId };
+    $.fn.QuickTable.columnId = columnId;
+    $.fn.QuickTable.rowId = rowId;
+    $.fn.QuickTable.cellId = cellId;
 }
