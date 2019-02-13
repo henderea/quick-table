@@ -161,7 +161,11 @@ export class Cell {
 
     get htmlData(): string { return this.$.html(); }
 
+    set htmlData(htmlData: string) { this.$.html(htmlData); }
+
     get textData(): string { return this.$.text(); }
+
+    set textData(textData: string) { this.$.text(textData); }
 }
 
 export class Cells extends QTIterable<Cell> {
