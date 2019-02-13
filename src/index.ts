@@ -344,7 +344,7 @@ export class Rows extends QTIterable<Row> {
 
     get cellTextData(): String[][] { return _.map(this.rows, r => r.cellTextData); }
 
-    get data(): (String[] | Object)[] { return _.map(this.rows, r => r.data); }
+    get data(): String[][] | Object[] { return _.map(this.rows, r => r.data); }
 }
 
 export class QTDo<T> {
@@ -372,7 +372,7 @@ export class QuickTable extends EventEmitter {
     private readonly _columns: Map<Column> = {};
     private readonly _rows: Map<Row> = {};
     private _columnDefs: ColumnDef[] = []
-    private _data: (String[] | Object)[] = [];
+    private _data: String[][] | Object[] = [];
     private _when: QTWhen = QTWhen[_makeInstance](this);
     autoDraw: boolean = true;
     id: any = null;
@@ -481,9 +481,9 @@ export class QuickTable extends EventEmitter {
         }
     }
 
-    get rawData(): (String[] | Object)[] { return this._data; }
+    get rawData(): String[][] | Object[] { return this._data; }
 
-    get data(): (String[] | Object)[] | null {
+    get data(): String[][] | Object[] | null {
         if (this._data && this._data.length > 0) {
             return this._data;
         }
@@ -493,7 +493,7 @@ export class QuickTable extends EventEmitter {
     get cellHtmlData(): String[][] { return this.rows.cellHtmlData; }
     get cellTextData(): String[][] { return this.rows.cellTextData; }
 
-    set data(data: (String[] | Object)[] | null) {
+    set data(data: String[][] | Object[] | null) {
         if (!data || data.length == 0) {
             this._data = [];
             if (this.autoDraw) { this.draw(); }
