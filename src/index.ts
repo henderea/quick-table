@@ -347,12 +347,33 @@ export class Rows extends QTIterable<Row> {
     get data(): (String[] | Object)[] { return _.map(this.rows, r => r.data); }
 }
 
+export class QTDo<T> {
+    private constructor(readonly quickTable: QuickTable, readonly selection: T | null) { }
+
+    static [_makeInstance]<T>(quickTable: QuickTable, selection: T | null) { return new QTDo<T>(quickTable, selection); }
+
+    do(action: (selection: T) => void): void { if (this.selection) { action(this.selection as T); } }
+}
+
+export class QTWhen {
+    private constructor(readonly quickTable: QuickTable) { }
+
+    static [_makeInstance](quickTable: QuickTable) { return new QTWhen(quickTable); }
+
+    column(column: number | ColumnId): QTDo<Column> { return QTDo[_makeInstance](this.quickTable, this.quickTable.column(column)); }
+    row(row: number | RowId, isHead: boolean = false): QTDo<Row> { return QTDo[_makeInstance](this.quickTable, this.quickTable.row(row, isHead)); }
+    headerRow(row: number | RowId): QTDo<Row> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerRow(row)); }
+    cell(row: number | RowId | CellId, column: number | ColumnId = 0, isHead: boolean = false): QTDo<Cell> { return QTDo[_makeInstance](this.quickTable, this.quickTable.cell(row, column, isHead)); }
+    headerCell(row: number | RowId, column: number | ColumnId = 0): QTDo<Cell> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerCell(row, column)); }
+}
+
 export class QuickTable extends EventEmitter {
     private readonly _table: JQuery;
     private readonly _columns: Map<Column> = {};
     private readonly _rows: Map<Row> = {};
     private _columnDefs: ColumnDef[] = []
     private _data: (String[] | Object)[] = [];
+    private _when: QTWhen = QTWhen[_makeInstance](this);
     autoDraw: boolean = true;
     id: any = null;
     private _inInit: boolean = false;
@@ -372,6 +393,8 @@ export class QuickTable extends EventEmitter {
         func(this);
         return this;
     }
+
+    get when(): QTWhen { return this._when; }
 
     get $(): JQuery { return this._table; }
 
