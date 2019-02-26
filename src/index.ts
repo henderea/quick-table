@@ -353,6 +353,8 @@ export class QTDo<T> {
     static [_makeInstance]<T>(quickTable: QuickTable, selection: T | null) { return new QTDo<T>(quickTable, selection); }
 
     do(action: (selection: T) => void): void { if (this.selection) { action(this.selection as T); } }
+
+    get<R>(getter: (selection: T) => (R | null)): R | null { return this.selection ? getter(this.selection as T) : null; }
 }
 
 export class QTWhen {
