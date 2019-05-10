@@ -380,6 +380,7 @@ export class QuickTable extends EventEmitter {
     private _loadingMessage: string = 'Loading...';
     private _loading: boolean = true;
     autoDraw: boolean = true;
+    clearOnLoad: boolean = true;
     id: any = null;
     private _inInit: boolean = false;
     private constructor(table: JQuery, initFunc: ((table: QuickTable) => void) | null = null) {
@@ -389,8 +390,8 @@ export class QuickTable extends EventEmitter {
             this._inInit = true;
             initFunc(this);
             this._inInit = false;
-            if(this.autoDraw) { this.draw(); }
         }
+        if(this.autoDraw) { this.draw(); }
     }
 
     static [_makeInstance](table: JQuery, initFunc: ((table: QuickTable) => void) | null = null): QuickTable { return new QuickTable(table, initFunc); }
@@ -407,7 +408,7 @@ export class QuickTable extends EventEmitter {
     set emptyMessage(value: string) {
         this._emptyMessage = value;
         if (!this._data || this._data.length == 0) {
-            this.draw();
+            if (this.autoDraw) { this.draw(); }
         }
     }
 
@@ -418,7 +419,7 @@ export class QuickTable extends EventEmitter {
     set loadingMessage(value: string) {
         this._loadingMessage = value;
         if (!this._data || this._data.length == 0) {
-            this.draw();
+            if (this.autoDraw) { this.draw(); }
         }
     }
 
@@ -428,8 +429,11 @@ export class QuickTable extends EventEmitter {
 
     set loading(value: boolean) {
         this._loading = value;
+        if(this.clearOnLoad) {
+            this.data = null;
+        }
         if (!this._data || this._data.length == 0) {
-            this.draw();
+            if (this.autoDraw) { this.draw(); }
         }
     }
 
