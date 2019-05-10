@@ -429,7 +429,7 @@ export class QuickTable extends EventEmitter {
 
     set loading(value: boolean) {
         this._loading = value;
-        if(this.clearOnLoad) {
+        if(this.clearOnLoad && value) {
             this.data = null;
         }
         if (!this._data || this._data.length == 0) {
