@@ -340,11 +340,11 @@ export class Rows extends QTIterable<Row> {
 
     get cells(): Cells { return Cells[_makeInstance](this.quickTable, this.cellIds); }
 
-    get cellHtmlData(): String[][] { return _.map(this.rows, r => r.cellHtmlData); }
+    get cellHtmlData(): string[][] { return _.map(this.rows, r => r.cellHtmlData); }
 
-    get cellTextData(): String[][] { return _.map(this.rows, r => r.cellTextData); }
+    get cellTextData(): string[][] { return _.map(this.rows, r => r.cellTextData); }
 
-    get data(): String[][] | Object[] { return _.map(this.rows, r => r.data); }
+    get data(): string[][] | Object[] { return _.map(this.rows, r => r.data); }
 }
 
 export class QTDo<T> {
@@ -374,8 +374,11 @@ export class QuickTable extends EventEmitter {
     private readonly _columns: Map<Column> = {};
     private readonly _rows: Map<Row> = {};
     private _columnDefs: ColumnDef[] = []
-    private _data: String[][] | Object[] = [];
+    private _data: string[][] | Object[] = [];
     private _when: QTWhen = QTWhen[_makeInstance](this);
+    private _emptyMessage: string = 'No Data';
+    private _loadingMessage: string = 'Loading...';
+    private _loading: boolean = true;
     autoDraw: boolean = true;
     id: any = null;
     private _inInit: boolean = false;
@@ -386,6 +389,7 @@ export class QuickTable extends EventEmitter {
             this._inInit = true;
             initFunc(this);
             this._inInit = false;
+            if(this.autoDraw) { this.draw(); }
         }
     }
 
@@ -394,6 +398,39 @@ export class QuickTable extends EventEmitter {
     chain(func: (table: this) => void): this {
         func(this);
         return this;
+    }
+
+    get emptyMessage(): string {
+        return this._emptyMessage;
+    }
+
+    set emptyMessage(value: string) {
+        this._emptyMessage = value;
+        if (!this._data || this._data.length == 0) {
+            this.draw();
+        }
+    }
+
+    get loadingMessage(): string {
+        return this._loadingMessage;
+    }
+
+    set loadingMessage(value: string) {
+        this._loadingMessage = value;
+        if (!this._data || this._data.length == 0) {
+            this.draw();
+        }
+    }
+
+    get loading(): boolean {
+        return this._loading;
+    }
+
+    set loading(value: boolean) {
+        this._loading = value;
+        if (!this._data || this._data.length == 0) {
+            this.draw();
+        }
     }
 
     get when(): QTWhen { return this._when; }
@@ -478,24 +515,24 @@ export class QuickTable extends EventEmitter {
             throw `Not enough columnDefs have been provided. Have ${this.columnCount} columns, but only ${columnDefs.length} columnDefs.`;
         }
         this._columnDefs = columnDefs;
-        if (this.autoDraw && this._data && this._data.length > 0) {
+        if (this.autoDraw) {
             this.draw();
         }
     }
 
-    get rawData(): String[][] | Object[] { return this._data; }
+    get rawData(): string[][] | Object[] { return this._data; }
 
-    get data(): String[][] | Object[] | null {
+    get data(): string[][] | Object[] | null {
         if (this._data && this._data.length > 0) {
             return this._data;
         }
         return this.cellTextData;
     }
 
-    get cellHtmlData(): String[][] { return this.rows.cellHtmlData; }
-    get cellTextData(): String[][] { return this.rows.cellTextData; }
+    get cellHtmlData(): string[][] { return this.rows.cellHtmlData; }
+    get cellTextData(): string[][] { return this.rows.cellTextData; }
 
-    set data(data: String[][] | Object[] | null) {
+    set data(data: string[][] | Object[] | null) {
         if (!data || data.length == 0) {
             this._data = [];
             if (this.autoDraw) { this.draw(); }
@@ -510,7 +547,7 @@ export class QuickTable extends EventEmitter {
             if (_.some(data, d => !_.isArray(d))) {
                 throw 'You must provide the data rows as arrays when columnDefs has not been set';
             }
-            let minSize: number = _.min(_.map(data, d => (d as String[]).length)) || 0;
+            let minSize: number = _.min(_.map(data, d => (d as string[]).length)) || 0;
             if (minSize < colCount) {
                 throw `One or more data rows had a size below the column count of ${colCount}. Minimum data row size: ${minSize}`;
             }
@@ -529,8 +566,17 @@ export class QuickTable extends EventEmitter {
         let $body: JQuery = this.$body;
         $body.empty();
         if (!this._data || this._data.length == 0) {
+            if((this.loading && this.loadingMessage) || this.emptyMessage) {
+                let $row: JQuery = $('<tr>');
+                let $cell: JQuery = $('<td>');
+                $cell.attr('colspan', this.columnCount);
+                $cell.html((this.loading && this.loadingMessage) || this.emptyMessage);
+                $row.append($cell);
+                $body.append($row);
+            }
             return this.trigger('draw.empty');
         }
+        this.loading = false;
         let colDefs: ColumnDef[] = this.columnDefs;
         let colCount: number = this.columnCount;
         if (!colDefs || colDefs.length == 0) {
