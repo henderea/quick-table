@@ -9,7 +9,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/jquery": "^3.3.29",
-    "@types/lodash": "^4.14.129",
+    "@types/lodash": "^4.14.132",
     "typescript": "^3.4.5"
   },
   "peerDependencies": {
