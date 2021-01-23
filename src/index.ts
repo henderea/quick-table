@@ -722,5 +722,5 @@ export function setup(jQuery: JQueryStatic, lodash: LoDashStatic) {
   qt.rowId = rowId;
   qt.cellId = cellId;
 
-  $.fn.QuickTable = qt;
+  jQuery.fn.QuickTable = qt;
 }
