@@ -2,14 +2,20 @@ import { LoDashStatic } from 'lodash';
 
 declare type Listener = (...args: any[]) => any;
 
+export interface JQueryQuickTable {
+  (initFunc?: ((table: QuickTable) => void) | null): QuickTable | QuickTables;
+  columnId(column: number | ColumnId): ColumnId;
+  rowId(row: number | RowId, isHead?: boolean): RowId;
+  cellId(row: number | RowId | CellId, column?: number | ColumnId, isHead?: boolean): CellId
+}
+
 declare global {
   interface JQuery {
-    (...args: any[]): JQuery;
-    fn: any;
+    QuickTable: JQueryQuickTable;
   }
 }
 
-let $: JQuery;
+let $: JQueryStatic;
 let _: LoDashStatic;
 
 declare interface Map<V> {
@@ -365,8 +371,8 @@ export class Rows extends QTIterable<Rows, Row> {
   get quickTable(): QuickTable { return this._quickTable; }
   get rowIds(): RowId[] { return this._rowIds; }
   get rows(): Row[] { return _.filter(_.map(this.rowIds, r => this.quickTable.row(r))) as Row[]; }
-  get $(): JQuery { return $(_.map(this.rows, r => r.$)); }
-  get $cells(): JQuery { return $(_.map(this.rows, r => r.$cells)); }
+  get $(): JQuery { return $(_.flatMap(this.rows, r => r.$.get())); }
+  get $cells(): JQuery { return $(_.flatMap(this.rows, r => r.$cells.get())); }
   get length(): number { return this.rowIds.length; }
   columnCellIds(column: number | ColumnId): CellId[] { return _.map(this.rows, r => r.cellId(column)); }
   columnCells(column: number | ColumnId): Cells { return Cells[_makeInstance](this.quickTable, this.columnCellIds(column)); }
@@ -669,10 +675,10 @@ export class QuickTables extends QTIterable<QuickTables, QuickTable> {
   draw(): this { return this.each(t => t.draw()); }
 }
 
-export function setup(jQuery: any, lodash: LoDashStatic) {
+export function setup(jQuery: JQueryStatic, lodash: LoDashStatic) {
   $ = jQuery;
   _ = lodash;
-  $.fn.QuickTable = function(initFunc: ((table: QuickTable) => void) | null = null): QuickTable | QuickTables {
+  let qt: any = function(this: JQuery, initFunc: ((table: QuickTable) => void) | null = null): QuickTable | QuickTables {
     let tables: QuickTables = QuickTables[_makeInstance]();
     this.filter('table').each(function(this: any) {
       const $this: JQuery = $(this);
@@ -689,7 +695,9 @@ export function setup(jQuery: any, lodash: LoDashStatic) {
     return tables;
   };
 
-  $.fn.QuickTable.columnId = columnId;
-  $.fn.QuickTable.rowId = rowId;
-  $.fn.QuickTable.cellId = cellId;
+  qt.columnId = columnId;
+  qt.rowId = rowId;
+  qt.cellId = cellId;
+
+  $.fn.QuickTable = qt;
 }
