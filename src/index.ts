@@ -3,7 +3,7 @@ import { LoDashStatic } from 'lodash';
 declare type Listener = (...args: any[]) => any;
 
 export interface JQueryQuickTable {
-  (initFunc?: ((table: QuickTable) => void) | null): QuickTable | QuickTables;
+  <T>(initFunc?: ((table: QuickTable<T>) => void) | null): QuickTable<T> | QuickTables<T>;
   columnId(column: number | ColumnId): ColumnId;
   rowId(row: number | RowId, isHead?: boolean): RowId;
   cellId(row: number | RowId | CellId, column?: number | ColumnId, isHead?: boolean): CellId
@@ -25,7 +25,13 @@ declare interface Map<V> {
 
 const _makeInstance = Symbol('makeInstance');
 
-export declare type ColumnDef = { cellType?: string, data?: string, render?: (data: any | null, row: Object) => string, html?: boolean, cssClass?: string };
+export declare interface ColumnDef<T> {
+  cellType?: string;
+  data?: string;
+  render?: (data: any, row: T) => string;
+  html?: boolean;
+  cssClass?: string;
+}
 
 export class ColumnId {
   private readonly _columnIndex: number;
@@ -175,37 +181,52 @@ export class QTIterable<T extends QTIterable<T, E>, E> {
   toArray(): E[] { return this.getter(this.self); }
 }
 
-export class Cell {
-  private readonly _quickTable: QuickTable;
+export class Cell<T> {
+  private readonly _quickTable: QuickTable<T>;
   private readonly _cellId: CellId;
-  private constructor(quickTable: QuickTable, cellId: CellId) {
+  private constructor(quickTable: QuickTable<T>, cellId: CellId) {
     this._quickTable = quickTable;
     this._cellId = cellId;
   }
 
-  static [_makeInstance](quickTable: QuickTable, cellId: CellId): Cell { return new Cell(quickTable, cellId); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>, cellId: CellId): Cell<T> { return new Cell(quickTable, cellId); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
   get cellId(): CellId { return this._cellId; }
   get rowIndex(): number { return this.cellId.rowIndex; }
   get isHead(): boolean { return this.cellId.isHead; }
   get columnIndex(): number { return this.cellId.columnIndex; }
   get rowId(): RowId { return this.cellId.rowId; }
   get columnId(): ColumnId { return this.cellId.columnId; }
-  get row(): Row | null { return this.quickTable.row(this.rowId); }
-  get column(): Column | null { return this.quickTable.column(this.columnId); }
+  get row(): Row<T> | null { return this.quickTable.row(this.rowId); }
+  get column(): Column<T> | null { return this.quickTable.column(this.columnId); }
   get $(): JQuery { return ((row) => row ? row.$cells.eq(this.columnIndex) : $())(this.row); }
   get htmlData(): string { return this.$.html(); }
   set htmlData(htmlData: string) { this.$.html(htmlData); }
   get textData(): string { return this.$.text(); }
   set textData(textData: string) { this.$.text(textData); }
+  get data(): any {
+    if(this.quickTable.rawData && this.quickTable.rawData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
+      const d: T = this.quickTable.rawData[this.rowIndex] as T;
+      const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
+      let fieldData: any = null;
+      if(def.data) {
+        fieldData = (d as Map<any>)[def.data];
+      }
+      if(typeof def.render == 'function') {
+        fieldData = def.render(fieldData, d);
+      }
+      return fieldData;
+    }
+    return this.htmlData;
+  }
 }
 
-export class Cells extends QTIterable<Cells, Cell> {
-  private readonly _quickTable: QuickTable;
+export class Cells<T> extends QTIterable<Cells<T>, Cell<T>> {
+  private readonly _quickTable: QuickTable<T>;
   private readonly _cellIds: CellId[];
-  private constructor(quickTable: QuickTable, cellIds: (CellId | Cell | Cells)[]) {
-    super(() => this, (c: Cells) => c.cells, (e: Cell[]) => Cells[_makeInstance](this.quickTable, e));
+  private constructor(quickTable: QuickTable<T>, cellIds: (CellId | Cell<T> | Cells<T>)[]) {
+    super(() => this, (c: Cells<T>) => c.cells, (e: Cell<T>[]) => Cells[_makeInstance](this.quickTable, e));
     this._quickTable = quickTable;
     this._cellIds = _.flatMap(_.flatten([cellIds]), c => {
       if(c instanceof Cell) { return c.cellId; }
@@ -214,30 +235,31 @@ export class Cells extends QTIterable<Cells, Cell> {
     });
   }
 
-  static [_makeInstance](quickTable: QuickTable, cellIds: (CellId | Cell | Cells)[]): Cells { return new Cells(quickTable, cellIds); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>, cellIds: (CellId | Cell<T> | Cells<T>)[]): Cells<T> { return new Cells(quickTable, cellIds); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
   get cellIds(): CellId[] { return this._cellIds; }
-  get cells(): Cell[] { return _.filter(_.map(this.cellIds, c => this.quickTable.cell(c))) as Cell[]; }
-  get $(): JQuery { return _.reduce(this.cells, (col: JQuery, c: Cell) => col.add(c.$), $()) as JQuery; }
+  get cells(): Cell<T>[] { return _.filter(_.map(this.cellIds, c => this.quickTable.cell(c))) as Cell<T>[]; }
+  get $(): JQuery { return _.reduce(this.cells, (col: JQuery, c: Cell<T>) => col.add(c.$), $()) as JQuery; }
   get htmlData(): string[] { return _.map(this.cells, c => c.htmlData); }
   get textData(): string[] { return _.map(this.cells, c => c.textData); }
+  get data(): any[] { return _.map(this.cells, c => c.data); }
   get length(): number { return this.cellIds.length; }
 }
 
-export class Column extends EventEmitter {
-  private readonly _quickTable: QuickTable;
+export class Column<T> extends EventEmitter {
+  private readonly _quickTable: QuickTable<T>;
   private readonly _columnId: ColumnId;
-  private constructor(quickTable: QuickTable, columnId: ColumnId) {
+  private constructor(quickTable: QuickTable<T>, columnId: ColumnId) {
     super();
     this._quickTable = quickTable;
     this._columnId = columnId;
     this.forward('column.visible', this.quickTable);
   }
 
-  static [_makeInstance](quickTable: QuickTable, columnId: ColumnId): Column { return new Column(quickTable, columnId); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>, columnId: ColumnId): Column<T> { return new Column(quickTable, columnId); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
   get columnId(): ColumnId { return this._columnId; }
   get index(): number { return this.columnId.columnIndex; }
   get $head(): JQuery { return this.quickTable.$.find(`thead tr th:nth-child(${this.index + 1}), thead tr td:nth-child(${this.index + 1})`); }
@@ -255,22 +277,22 @@ export class Column extends EventEmitter {
     });
   }
 
-  cell(row: number | RowId, isHead: boolean = false): Cell | null { return (r => r && r.cell(this.columnId))(this.quickTable.row(row, isHead)); }
-  headerCell(row: number | RowId): Cell | null { return this.cell(row, true); }
+  cell(row: number | RowId, isHead: boolean = false): Cell<T> | null { return (r => r && r.cell(this.columnId))(this.quickTable.row(row, isHead)); }
+  headerCell(row: number | RowId): Cell<T> | null { return this.cell(row, true); }
   cellId(row: number | RowId, isHead: boolean = false): CellId { return cellId(row, this.columnId, isHead); }
   get headerCellIds(): CellId[] { return _.map(_.range(this.quickTable.headerRowCount), r => this.cellId(r, true)); }
   get bodyCellIds(): CellId[] { return _.map(_.range(this.quickTable.rowCount), r => this.cellId(r, false)); }
   get cellIds(): CellId[] { return _.concat([], this.headerCellIds, this.bodyCellIds); }
-  get headerCells(): Cells { return Cells[_makeInstance](this.quickTable, this.headerCellIds); }
-  get bodyCells(): Cells { return Cells[_makeInstance](this.quickTable, this.bodyCellIds); }
-  get cells(): Cells { return Cells[_makeInstance](this.quickTable, this.cellIds); }
+  get headerCells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.headerCellIds); }
+  get bodyCells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.bodyCellIds); }
+  get cells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.cellIds); }
 }
 
-export class Columns extends QTIterable<Columns, Column> {
-  private readonly _quickTable: QuickTable;
+export class Columns<T> extends QTIterable<Columns<T>, Column<T>> {
+  private readonly _quickTable: QuickTable<T>;
   private readonly _columnIds: ColumnId[];
-  private constructor(quickTable: QuickTable, columnIds: (ColumnId | Column | Columns)[]) {
-    super(() => this, (c: Columns) => c.columns, (e: Column[]) => Columns[_makeInstance](this.quickTable, e));
+  private constructor(quickTable: QuickTable<T>, columnIds: (ColumnId | Column<T> | Columns<T>)[]) {
+    super(() => this, (c: Columns<T>) => c.columns, (e: Column<T>[]) => Columns[_makeInstance](this.quickTable, e));
     this._quickTable = quickTable;
     this._columnIds = _.flatMap(_.flatten([columnIds]), c => {
       if(c instanceof Column) { return c.columnId; }
@@ -279,40 +301,40 @@ export class Columns extends QTIterable<Columns, Column> {
     });
   }
 
-  static [_makeInstance](quickTable: QuickTable, columnIds: (ColumnId | Column | Columns)[]): Columns { return new Columns(quickTable, columnIds); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>, columnIds: (ColumnId | Column<T> | Columns<T>)[]): Columns<T> { return new Columns(quickTable, columnIds); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
   get columnIds(): ColumnId[] { return this._columnIds; }
-  get columns(): Column[] { return _.filter(_.map(this.columnIds, c => this.quickTable.column(c))) as Column[]; }
-  get $head(): JQuery { return _.reduce(this.columns, (col: JQuery, c: Column) => col.add(c.$head), $()); }
-  get $body(): JQuery { return _.reduce(this.columns, (col: JQuery, c: Column) => col.add(c.$body), $()); }
-  get $(): JQuery { return _.reduce(this.columns, (col: JQuery, c: Column) => col.add(c.$), $()); }
+  get columns(): Column<T>[] { return _.filter(_.map(this.columnIds, c => this.quickTable.column(c))) as Column<T>[]; }
+  get $head(): JQuery { return _.reduce(this.columns, (col: JQuery, c: Column<T>) => col.add(c.$head), $()); }
+  get $body(): JQuery { return _.reduce(this.columns, (col: JQuery, c: Column<T>) => col.add(c.$body), $()); }
+  get $(): JQuery { return _.reduce(this.columns, (col: JQuery, c: Column<T>) => col.add(c.$), $()); }
   get headerCellIds(): CellId[] { return _.flatMap(this.columns, c => c.headerCellIds); }
   get bodyCellIds(): CellId[] { return _.flatMap(this.columns, c => c.bodyCellIds); }
   get cellIds(): CellId[] { return _.flatMap(this.columns, c => c.cellIds); }
-  get headerCells(): Cells { return Cells[_makeInstance](this.quickTable, this.headerCellIds); }
-  get bodyCells(): Cells { return Cells[_makeInstance](this.quickTable, this.bodyCellIds); }
-  get cells(): Cells { return Cells[_makeInstance](this.quickTable, this.cellIds); }
+  get headerCells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.headerCellIds); }
+  get bodyCells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.bodyCellIds); }
+  get cells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.cellIds); }
   set visible(visible: boolean) { this.each(c => c.visible = visible); }
   get length(): number { return this.columnIds.length; }
 
-  rowCells(row: number | RowId, isHead: boolean = false): Cells { return Cells[_makeInstance](this.quickTable, _.map(this.columns, c => c.cellId(row, isHead))); }
-  headerRowCells(row: number | RowId): Cells { return this.rowCells(row, true); }
+  rowCells(row: number | RowId, isHead: boolean = false): Cells<T> { return Cells[_makeInstance](this.quickTable, _.map(this.columns, c => c.cellId(row, isHead))); }
+  headerRowCells(row: number | RowId): Cells<T> { return this.rowCells(row, true); }
 }
 
-export class Row extends EventEmitter {
-  private readonly _cells: Map<Cell> = {};
-  private readonly _quickTable: QuickTable;
+export class Row<T> extends EventEmitter {
+  private readonly _cells: Map<Cell<T>> = {};
+  private readonly _quickTable: QuickTable<T>;
   private readonly _rowId: RowId;
-  private constructor(quickTable: QuickTable, rowId: RowId) {
+  private constructor(quickTable: QuickTable<T>, rowId: RowId) {
     super();
     this._quickTable = quickTable;
     this._rowId = rowId;
   }
 
-  static [_makeInstance](quickTable: QuickTable, rowId: RowId): Row { return new Row(quickTable, rowId); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>, rowId: RowId): Row<T> { return new Row(quickTable, rowId); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
   get rowId(): RowId { return this._rowId; }
   get isHead(): boolean { return this.rowId.isHead; }
   get index(): number { return this.rowId.rowIndex; }
@@ -330,7 +352,7 @@ export class Row extends EventEmitter {
     });
   }
 
-  cell(column: number | ColumnId): Cell | null {
+  cell(column: number | ColumnId): Cell<T> | null {
     column = columnId(column);
     if(!_.inRange(column.columnIndex, this.length)) { return null; }
     if(!(this._cells[String(column)] instanceof Cell)) {
@@ -341,11 +363,11 @@ export class Row extends EventEmitter {
 
   cellId(column: number | ColumnId): CellId { return cellId(this.rowId, column); }
   get cellIds(): CellId[] { return _.map(_.range(this.length), i => this.cellId(i)); }
-  get cells(): Cells { return Cells[_makeInstance](this.quickTable, this.cellIds); }
+  get cells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.cellIds); }
   get length(): number { return this.$cells.length; }
   get cellHtmlData(): string[] { return this.cells.htmlData; }
   get cellTextData(): string[] { return this.cells.textData; }
-  get data(): string[] | Object {
+  get data(): string[] | T {
     if(this.quickTable.rawData && this.quickTable.rawData.length > this.index) {
       return this.quickTable.rawData[this.index];
     }
@@ -353,11 +375,11 @@ export class Row extends EventEmitter {
   }
 }
 
-export class Rows extends QTIterable<Rows, Row> {
-  private readonly _quickTable: QuickTable;
+export class Rows<T> extends QTIterable<Rows<T>, Row<T>> {
+  private readonly _quickTable: QuickTable<T>;
   private readonly _rowIds: RowId[];
-  private constructor(quickTable: QuickTable, rowIds: (RowId | Row | Rows)[]) {
-    super(() => this, (r: Rows) => r.rows, (e: Row[]) => Rows[_makeInstance](this.quickTable, e));
+  private constructor(quickTable: QuickTable<T>, rowIds: (RowId | Row<T> | Rows<T>)[]) {
+    super(() => this, (r: Rows<T>) => r.rows, (e: Row<T>[]) => Rows[_makeInstance](this.quickTable, e));
     this._quickTable = quickTable;
     this._rowIds = _.flatMap(_.flatten([rowIds]), r => {
       if(r instanceof Row) { return r.rowId; }
@@ -366,62 +388,63 @@ export class Rows extends QTIterable<Rows, Row> {
     });
   }
 
-  static [_makeInstance](quickTable: QuickTable, rowIds: (RowId | Row | Rows)[]): Rows { return new Rows(quickTable, rowIds); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>, rowIds: (RowId | Row<T> | Rows<T>)[]): Rows<T> { return new Rows(quickTable, rowIds); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
   get rowIds(): RowId[] { return this._rowIds; }
-  get rows(): Row[] { return _.filter(_.map(this.rowIds, r => this.quickTable.row(r))) as Row[]; }
+  get rows(): Row<T>[] { return _.filter(_.map(this.rowIds, r => this.quickTable.row(r))) as Row<T>[]; }
   get $(): JQuery { return $(_.flatMap(this.rows, r => r.$.get())); }
   get $cells(): JQuery { return $(_.flatMap(this.rows, r => r.$cells.get())); }
   get length(): number { return this.rowIds.length; }
   columnCellIds(column: number | ColumnId): CellId[] { return _.map(this.rows, r => r.cellId(column)); }
-  columnCells(column: number | ColumnId): Cells { return Cells[_makeInstance](this.quickTable, this.columnCellIds(column)); }
+  columnCells(column: number | ColumnId): Cells<T> { return Cells[_makeInstance](this.quickTable, this.columnCellIds(column)); }
   get cellIds(): CellId[] { return _.flatMap(this.rows, r => r.cellIds); }
-  get cells(): Cells { return Cells[_makeInstance](this.quickTable, this.cellIds); }
+  get cells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.cellIds); }
   get cellHtmlData(): string[][] { return _.map(this.rows, r => r.cellHtmlData); }
   get cellTextData(): string[][] { return _.map(this.rows, r => r.cellTextData); }
   get data(): string[][] | Object[] { return _.map(this.rows, r => r.data); }
+  set visible(visible: boolean) { _.each(this.rows, r => r.visible = visible); }
 }
 
-export class QTDo<T> {
-  private readonly _quickTable: QuickTable;
-  private readonly _selection: T | null;
-  private constructor(quickTable: QuickTable, selection: T | null) {
+export class QTDo<T, S> {
+  private readonly _quickTable: QuickTable<T>;
+  private readonly _selection: S | null;
+  private constructor(quickTable: QuickTable<T>, selection: S | null) {
     this._quickTable = quickTable;
     this._selection = selection;
   }
 
-  static [_makeInstance]<T>(quickTable: QuickTable, selection: T | null) { return new QTDo<T>(quickTable, selection); }
+  static [_makeInstance]<T, S>(quickTable: QuickTable<T>, selection: S | null) { return new QTDo<T, S>(quickTable, selection); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
-  get selection(): T | null { return this._selection; }
-  do(action: (selection: T) => void): void { if(this.selection) { action(this.selection as T); } }
-  get<R>(getter: (selection: T) => (R | null)): R | null { return this.selection ? getter(this.selection as T) : null; }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
+  get selection(): S | null { return this._selection; }
+  do(action: (selection: S) => void): void { if(this.selection) { action(this.selection as S); } }
+  get<R>(getter: (selection: S) => (R | null)): R | null { return this.selection ? getter(this.selection as S) : null; }
 }
 
-export class QTWhen {
-  private readonly _quickTable: QuickTable;
-  private constructor(quickTable: QuickTable) {
+export class QTWhen<T> {
+  private readonly _quickTable: QuickTable<T>;
+  private constructor(quickTable: QuickTable<T>) {
     this._quickTable = quickTable;
   }
 
-  static [_makeInstance](quickTable: QuickTable) { return new QTWhen(quickTable); }
+  static [_makeInstance]<T>(quickTable: QuickTable<T>) { return new QTWhen(quickTable); }
 
-  get quickTable(): QuickTable { return this._quickTable; }
-  column(column: number | ColumnId): QTDo<Column> { return QTDo[_makeInstance](this.quickTable, this.quickTable.column(column)); }
-  row(row: number | RowId, isHead: boolean = false): QTDo<Row> { return QTDo[_makeInstance](this.quickTable, this.quickTable.row(row, isHead)); }
-  headerRow(row: number | RowId): QTDo<Row> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerRow(row)); }
-  cell(row: number | RowId | CellId, column: number | ColumnId = 0, isHead: boolean = false): QTDo<Cell> { return QTDo[_makeInstance](this.quickTable, this.quickTable.cell(row, column, isHead)); }
-  headerCell(row: number | RowId, column: number | ColumnId = 0): QTDo<Cell> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerCell(row, column)); }
+  get quickTable(): QuickTable<T> { return this._quickTable; }
+  column(column: number | ColumnId): QTDo<T, Column<T>> { return QTDo[_makeInstance](this.quickTable, this.quickTable.column(column)); }
+  row(row: number | RowId, isHead: boolean = false): QTDo<T, Row<T>> { return QTDo[_makeInstance](this.quickTable, this.quickTable.row(row, isHead)); }
+  headerRow(row: number | RowId): QTDo<T, Row<T>> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerRow(row)); }
+  cell(row: number | RowId | CellId, column: number | ColumnId = 0, isHead: boolean = false): QTDo<T, Cell<T>> { return QTDo[_makeInstance](this.quickTable, this.quickTable.cell(row, column, isHead)); }
+  headerCell(row: number | RowId, column: number | ColumnId = 0): QTDo<T, Cell<T>> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerCell(row, column)); }
 }
 
-export class QuickTable extends EventEmitter {
+export class QuickTable<T> extends EventEmitter {
   private readonly _table: JQuery;
-  private readonly _columns: Map<Column> = {};
-  private readonly _rows: Map<Row> = {};
-  private _columnDefs: ColumnDef[] = [];
-  private _data: string[][] | Object[] = [];
-  private _when: QTWhen = QTWhen[_makeInstance](this);
+  private readonly _columns: Map<Column<T>> = {};
+  private readonly _rows: Map<Row<T>> = {};
+  private _columnDefs: ColumnDef<T>[] = [];
+  private _data: string[][] | T[] = [];
+  private _when: QTWhen<T> = QTWhen[_makeInstance](this);
   private _emptyMessage: string = 'No Data';
   private _loadingMessage: string = 'Loading...';
   private _loading: boolean = true;
@@ -429,7 +452,7 @@ export class QuickTable extends EventEmitter {
   clearOnLoad: boolean = true;
   id: any = null;
   private readonly _inInit: boolean = false;
-  private constructor(table: JQuery, initFunc: ((table: QuickTable) => void) | null = null) {
+  private constructor(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null) {
     super();
     this._table = $(table);
     if(initFunc && typeof initFunc == 'function') {
@@ -440,7 +463,7 @@ export class QuickTable extends EventEmitter {
     if(this.autoDraw) { this.draw(); }
   }
 
-  static [_makeInstance](table: JQuery, initFunc: ((table: QuickTable) => void) | null = null): QuickTable { return new QuickTable(table, initFunc); }
+  static [_makeInstance]<T>(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null): QuickTable<T> { return new QuickTable(table, initFunc); }
 
   chain(func: (table: this) => void): this {
     func(this);
@@ -474,16 +497,16 @@ export class QuickTable extends EventEmitter {
     }
   }
 
-  get when(): QTWhen { return this._when; }
+  get when(): QTWhen<T> { return this._when; }
   get $(): JQuery { return this._table; }
   getSection(isHead: boolean): JQuery { return this.$.find(isHead ? 'thead' : 'tbody'); }
   get $head(): JQuery { return this.getSection(true); }
   get $body(): JQuery { return this.getSection(false); }
   get columnCount(): number { return this.$.find('tr').eq(0).find('th,td').length; }
-  get columns(): Columns { return Columns[_makeInstance](this, this.columnIds); }
+  get columns(): Columns<T> { return Columns[_makeInstance](this, this.columnIds); }
   get columnIds(): ColumnId[] { return _.map(_.range(this.columnCount), i => this.columnId(i)); }
 
-  column(column: number | ColumnId): Column | null {
+  column(column: number | ColumnId): Column<T> | null {
     column = columnId(column);
     if(!_.inRange(column.columnIndex, this.columnCount)) { return null; }
     if(!(this._columns[String(column)] instanceof Column)) {
@@ -493,21 +516,21 @@ export class QuickTable extends EventEmitter {
   }
 
   columnId(column: number | ColumnId): ColumnId { return columnId(column); }
-  getColumns(...columns: (number | ColumnId)[]): Columns { return Columns[_makeInstance](this, _.map(_.flatten(columns), c => this.columnId(c))); }
+  getColumns(...columns: (number | ColumnId)[]): Columns<T> { return Columns[_makeInstance](this, _.map(_.flatten(columns), c => this.columnId(c))); }
   getRowCount(isHead: boolean): number { return this[isHead ? '$head' : '$body'].find('tr').length; }
   get rowCount(): number { return this.getRowCount(false); }
   get headerRowCount(): number { return this.getRowCount(true); }
-  getAllRows(isHead: boolean): Rows { return Rows[_makeInstance](this, this.getAllRowIds(isHead)); }
+  getAllRows(isHead: boolean): Rows<T> { return Rows[_makeInstance](this, this.getAllRowIds(isHead)); }
   getAllRowIds(isHead: boolean): RowId[] { return _.map(_.range(this.getRowCount(isHead)), i => this.rowId(i, isHead)); }
-  get rows(): Rows { return this.getAllRows(false); }
-  get headerRows(): Rows { return this.getAllRows(true); }
+  get rows(): Rows<T> { return this.getAllRows(false); }
+  get headerRows(): Rows<T> { return this.getAllRows(true); }
   get rowIds(): RowId[] { return this.getAllRowIds(false); }
   get headerRowIds(): RowId[] { return this.getAllRowIds(true); }
-  getBodyRows(...rows: (number | RowId)[]): Rows { return Rows[_makeInstance](this, _.map(_.flatten(rows), r => this.rowId(r, false))); }
-  getHeaderRows(...rows: (number | RowId)[]): Rows { return Rows[_makeInstance](this, _.map(_.flatten(rows), r => this.rowId(r, true))); }
-  getRows(...rowIds: RowId[]): Rows { return Rows[_makeInstance](this, _.filter(_.flatten(rowIds), r => r instanceof RowId)); }
+  getBodyRows(...rows: (number | RowId)[]): Rows<T> { return Rows[_makeInstance](this, _.map(_.flatten(rows), r => this.rowId(r, false))); }
+  getHeaderRows(...rows: (number | RowId)[]): Rows<T> { return Rows[_makeInstance](this, _.map(_.flatten(rows), r => this.rowId(r, true))); }
+  getRows(...rowIds: RowId[]): Rows<T> { return Rows[_makeInstance](this, _.filter(_.flatten(rowIds), r => r instanceof RowId)); }
 
-  row(row: number | RowId, isHead: boolean = false): Row | null {
+  row(row: number | RowId, isHead: boolean = false): Row<T> | null {
     row = rowId(row, isHead);
     if(!_.inRange(row.rowIndex, this.getRowCount(row.isHead))) { return null; }
     if(!(this._rows[String(row)] instanceof Row)) {
@@ -517,18 +540,18 @@ export class QuickTable extends EventEmitter {
   }
 
   rowId(row: number | RowId, isHead: boolean = false): RowId { return rowId(row, isHead); }
-  headerRow(row: number | RowId): Row | null { return this.row(row, true); }
+  headerRow(row: number | RowId): Row<T> | null { return this.row(row, true); }
   headerRowId(row: number | RowId): RowId { return this.rowId(row, true); }
 
-  cell(row: number | RowId | CellId, column: number | ColumnId = 0, isHead: boolean = false): Cell | null {
+  cell(row: number | RowId | CellId, column: number | ColumnId = 0, isHead: boolean = false): Cell<T> | null {
     let cell: CellId = cellId(row, column, isHead);
     return (r => r && r.cell(cell.columnId))(this.row(cell.rowId));
   }
 
-  headerCell(row: number | RowId, column: number | ColumnId): Cell | null { return this.cell(row, column, true); }
+  headerCell(row: number | RowId, column: number | ColumnId): Cell<T> | null { return this.cell(row, column, true); }
 
-  get columnDefs(): ColumnDef[] { return this._columnDefs; }
-  set columnDefs(columnDefs: ColumnDef[]) {
+  get columnDefs(): ColumnDef<T>[] { return this._columnDefs; }
+  set columnDefs(columnDefs: ColumnDef<T>[]) {
     if(columnDefs.length < this.columnCount) {
       throw `Not enough columnDefs have been provided. Have ${this.columnCount} columns, but only ${columnDefs.length} columnDefs.`;
     }
@@ -538,8 +561,8 @@ export class QuickTable extends EventEmitter {
     }
   }
 
-  get rawData(): string[][] | Object[] { return this._data; }
-  get data(): string[][] | Object[] | null {
+  get rawData(): string[][] | T[] { return this._data; }
+  get data(): string[][] | T[] | null {
     if(this._data && this._data.length > 0) {
       return this._data;
     }
@@ -549,7 +572,7 @@ export class QuickTable extends EventEmitter {
   get cellHtmlData(): string[][] { return this.rows.cellHtmlData; }
   get cellTextData(): string[][] { return this.rows.cellTextData; }
 
-  set data(data: string[][] | Object[] | null) {
+  set data(data: string[][] | T[] | null) {
     if(!data || data.length == 0) {
       this._data = [];
       if(this.autoDraw) { this.draw(); }
@@ -594,7 +617,7 @@ export class QuickTable extends EventEmitter {
       return this.trigger('draw.empty');
     }
     this.loading = false;
-    let colDefs: ColumnDef[] = this.columnDefs;
+    let colDefs: ColumnDef<T>[] = this.columnDefs;
     let colCount: number = this.columnCount;
     if(!colDefs || colDefs.length == 0) {
       // rows are arrays
@@ -609,10 +632,10 @@ export class QuickTable extends EventEmitter {
       });
     } else {
       // rows use columnDefs
-      _.each(this._data, d => {
+      _.each(this._data as T[], (d: T) => {
         let $row = $('<tr>');
         for(let i = 0; i < colCount; i++) {
-          let def: ColumnDef = colDefs[i];
+          let def: ColumnDef<T> = colDefs[i];
           let $cell: JQuery;
           if(def.cellType == 'th') {
             $cell = $('<th>');
@@ -647,26 +670,26 @@ export class QuickTable extends EventEmitter {
 
 const _addTable = Symbol('addTable');
 
-export class QuickTables extends QTIterable<QuickTables, QuickTable> {
-  private readonly _tables: QuickTable[] = [];
-  private constructor(tables: (QuickTable | QuickTables)[] = []) {
-    super(() => this, (t: QuickTables) => t.tables, (e: QuickTable[]) => QuickTables[_makeInstance](e));
+export class QuickTables<T> extends QTIterable<QuickTables<T>, QuickTable<T>> {
+  private readonly _tables: QuickTable<T>[] = [];
+  private constructor(tables: (QuickTable<T> | QuickTables<T>)[] = []) {
+    super(() => this, (t: QuickTables<T>) => t.tables, (e: QuickTable<T>[]) => QuickTables[_makeInstance](e));
     this._tables = _.flatMap(_.flatten([tables]), t => {
       if(t instanceof QuickTables) { return t.tables; }
       return t;
     });
   }
 
-  static [_makeInstance](tables: QuickTable[] = []): QuickTables { return new QuickTables(tables); }
+  static [_makeInstance]<T>(tables: QuickTable<T>[] = []): QuickTables<T> { return new QuickTables(tables); }
 
-  get tables(): QuickTable[] { return _.clone(this._tables); }
+  get tables(): QuickTable<T>[] { return _.clone(this._tables); }
   get length(): number { return this._tables.length; }
-  get(index: number): QuickTable { return this._tables[index]; }
-  getById(id: any): QuickTable | undefined { return this.find(t => t.id == id); }
-  getAll(...indexes: number[]): QuickTables { return new QuickTables(_.filter(_.map(indexes, i => this.get(i)))); }
-  getAllById(...ids: any[]): QuickTables { return new QuickTables(_.filter(_.map(ids, i => this.getById(i))) as QuickTable[]); }
+  get(index: number): QuickTable<T> { return this._tables[index]; }
+  getById(id: any): QuickTable<T> | undefined { return this.find(t => t.id == id); }
+  getAll(...indexes: number[]): QuickTables<T> { return new QuickTables(_.filter(_.map(indexes, i => this.get(i)))); }
+  getAllById(...ids: any[]): QuickTables<T> { return new QuickTables(_.filter(_.map(ids, i => this.getById(i))) as QuickTable<T>[]); }
 
-  [_addTable](table: QuickTable): void {
+  [_addTable](table: QuickTable<T>): void {
     if(table instanceof QuickTable) {
       this._tables.push(table);
     }
@@ -678,11 +701,11 @@ export class QuickTables extends QTIterable<QuickTables, QuickTable> {
 export function setup(jQuery: JQueryStatic, lodash: LoDashStatic) {
   $ = jQuery;
   _ = lodash;
-  let qt: any = function(this: JQuery, initFunc: ((table: QuickTable) => void) | null = null): QuickTable | QuickTables {
-    let tables: QuickTables = QuickTables[_makeInstance]();
+  let qt: any = function <T>(this: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null): QuickTable<T> | QuickTables<T> {
+    let tables: QuickTables<T> = QuickTables[_makeInstance]();
     this.filter('table').each(function(this: any) {
       const $this: JQuery = $(this);
-      let table: QuickTable | null = $this.data('quickTable');
+      let table: QuickTable<T> | null = $this.data('quickTable');
       if(!table) {
         table = QuickTable[_makeInstance]($this, initFunc);
         $this.data('quickTable', table);
