@@ -166,11 +166,12 @@ export class QTIterable<T extends QTIterable<T, E>, E> {
   private getter(self: T): E[] { return this._getter(self); }
   private maker(elements: E[]): T { return this._maker(elements); }
 
-  each(iter: (e: E) => void): this {
+  forEach(iter: (e: E) => void): this {
     _.each(this.toArray(), iter);
     return this;
   }
 
+  each(iter: (e: E) => void): this { return this.forEach((e: E) => { iter(e); }) }
   map<R>(iter: (e: E) => R): R[] { return _.map(this.toArray(), iter); }
   flatMap<R>(iter: (e: E) => R): R[] { return _.flatMap(this.toArray(), iter); }
   some(iter: (e: E) => boolean): boolean { return _.some(this.toArray(), iter); }
@@ -403,7 +404,7 @@ export class Rows<T> extends QTIterable<Rows<T>, Row<T>> {
   get cellHtmlData(): string[][] { return _.map(this.rows, r => r.cellHtmlData); }
   get cellTextData(): string[][] { return _.map(this.rows, r => r.cellTextData); }
   get data(): string[][] | Object[] { return _.map(this.rows, r => r.data); }
-  set visible(visible: boolean) { _.each(this.rows, r => r.visible = visible); }
+  set visible(visible: boolean) { this.each(r => r.visible = visible); }
 }
 
 export class QTDo<T, S> {
