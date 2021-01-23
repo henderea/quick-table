@@ -669,8 +669,8 @@ export class QuickTables extends QTIterable<QuickTables, QuickTable> {
   draw(): this { return this.each(t => t.draw()); }
 }
 
-export function setup(jquery: JQuery, lodash: LoDashStatic) {
-  $ = jquery;
+export function setup(jQuery: any, lodash: LoDashStatic) {
+  $ = jQuery;
   _ = lodash;
   $.fn.QuickTable = function(initFunc: ((table: QuickTable) => void) | null = null): QuickTable | QuickTables {
     let tables: QuickTables = QuickTables[_makeInstance]();
