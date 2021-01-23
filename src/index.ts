@@ -208,6 +208,21 @@ export class Cell<T> {
   set textData(textData: string) { this.$.text(textData); }
   get data(): any {
     if(this.quickTable.rawData && this.quickTable.rawData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
+      const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
+      if(typeof def.render == 'function') {
+        return this.textData;
+      }
+      const d: T = this.quickTable.rawData[this.rowIndex] as T;
+      let fieldData: any = null;
+      if(def.data) {
+        fieldData = (d as Map<any>)[def.data];
+        return fieldData;
+      }
+    }
+    return this.textData;
+  }
+  get rawData(): any {
+    if(this.quickTable.rawData && this.quickTable.rawData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
       const d: T = this.quickTable.rawData[this.rowIndex] as T;
       const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
       let fieldData: any = null;
@@ -245,6 +260,7 @@ export class Cells<T> extends QTIterable<Cells<T>, Cell<T>> {
   get htmlData(): string[] { return _.map(this.cells, c => c.htmlData); }
   get textData(): string[] { return _.map(this.cells, c => c.textData); }
   get data(): any[] { return _.map(this.cells, c => c.data); }
+  get rawData(): any[] { return _.map(this.cells, c => c.rawData); }
   get length(): number { return this.cellIds.length; }
 }
 
