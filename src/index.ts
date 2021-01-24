@@ -496,6 +496,8 @@ export class Row<T> extends EventEmitter {
   get length(): number { return this.$cells.length; }
   get cellHtmlData(): string[] { return this.cells.htmlData; }
   get cellTextData(): string[] { return this.cells.textData; }
+  get cellData(): any[] { return this.cells.data; }
+  get cellRawData(): any[] { return this.cells.rawData; }
   get data(): string[] | T {
     if(this.quickTable.rawData && this.quickTable.rawData.length > this.index) {
       return this.quickTable.rawData[this.index];
@@ -535,6 +537,8 @@ export class Rows<T> extends QTIterable<Rows<T>, Row<T>> {
   get cells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.cellIds); }
   get cellHtmlData(): string[][] { return _.map(this.rows, r => r.cellHtmlData); }
   get cellTextData(): string[][] { return _.map(this.rows, r => r.cellTextData); }
+  get cellData(): any[][] { return _.map(this.rows, r => r.cellData); }
+  get cellRawData(): any[][] { return _.map(this.rows, r => r.cellRawData); }
   get data(): string[][] | Object[] { return _.map(this.rows, r => r.data); }
   set visible(visible: boolean) { this.each(r => r.visible = visible); }
 }
