@@ -15,14 +15,18 @@ declare global {
   }
 }
 
+/* @internal */
 let $: JQueryStatic;
+/* @internal */
 let _: LoDashStatic;
 
+/* @internal */
 declare interface Map<V> {
   [key: string]: V;
   [key: number]: V;
 }
 
+/* @internal */
 const _makeInstance = Symbol('makeInstance');
 
 export declare interface ColumnDef<T> {
@@ -34,11 +38,14 @@ export declare interface ColumnDef<T> {
 }
 
 export class ColumnId {
+  /* @internal */
   private readonly _columnIndex: number;
+  /* @internal */
   private constructor(columnIndex: number) {
     this._columnIndex = columnIndex;
   }
 
+  /* @internal */
   static [_makeInstance](columnIndex: number): ColumnId { return new ColumnId(columnIndex); }
 
   get columnIndex(): number { return this._columnIndex; }
@@ -46,6 +53,7 @@ export class ColumnId {
   toString(): string { return `ColumnId[${this.columnIndex}]`; }
 }
 
+/* @internal */
 const columnIds: Map<ColumnId> = {};
 
 export function columnId(column: number | ColumnId): ColumnId {
@@ -57,13 +65,17 @@ export function columnId(column: number | ColumnId): ColumnId {
 }
 
 export class CellId {
+  /* @internal */
   private readonly _rowId: RowId;
+  /* @internal */
   private readonly _columnId: ColumnId;
+  /* @internal */
   private constructor(rowId: RowId, columnId: ColumnId) {
     this._rowId = rowId;
     this._columnId = columnId;
   }
 
+  /* @internal */
   static [_makeInstance](rowId: RowId, columnId: ColumnId): CellId { return new CellId(rowId, columnId); }
 
   get rowId(): RowId { return this._rowId; }
@@ -75,22 +87,29 @@ export class CellId {
   toString(): string { return `CellId[${this.isHead ? 'head' : 'body'}:${this.rowIndex}, ${this.columnIndex}]`; }
 }
 
+/* @internal */
 const _getCellId = Symbol('getCellId');
 
 export class RowId {
+  /* @internal */
   private readonly cellIds: Map<CellId> = {};
+  /* @internal */
   private readonly _rowIndex: number;
+  /* @internal */
   private readonly _isHead: boolean;
+  /* @internal */
   private constructor(rowIndex: number, isHead: boolean) {
     this._rowIndex = rowIndex;
     this._isHead = isHead;
   }
 
+  /* @internal */
   static [_makeInstance](rowIndex: number, isHead: boolean): RowId { return new RowId(rowIndex, isHead); }
 
   get rowIndex(): number { return this._rowIndex; }
   get isHead(): boolean { return this._isHead; }
 
+  /* @internal */
   [_getCellId](columnId: ColumnId): CellId {
     if(!(this.cellIds[String(columnId)] instanceof CellId)) {
       this.cellIds[String(columnId)] = CellId[_makeInstance](this, columnId);
@@ -101,6 +120,7 @@ export class RowId {
   toString(): string { return `RowId[${this.isHead ? 'head' : 'body'}:${this.rowIndex}]`; }
 }
 
+/* @internal */
 const rowIds: { head: Map<RowId>, body: Map<RowId> } = {
   head: {},
   body: {}
@@ -125,8 +145,13 @@ export function cellId(row: number | RowId | CellId, column: number | ColumnId =
 }
 
 export class EventEmitter {
-  readonly listeners: Map<Listener[]> = {};
+  /* @internal */
+  private readonly _listeners: Map<Listener[]> = {};
+  /* @internal */
   protected constructor() { }
+
+  /* @internal */
+  private get listeners(): Map<Listener[]> { return this._listeners; }
 
   on(event: string, handler: Listener): this {
     if(!this.listeners[event]) { this.listeners[event] = []; }
@@ -151,27 +176,78 @@ export class EventEmitter {
   }
 }
 
+/* @internal */
+const _partition = Symbol('_partition');
+
+export class QTPartition<T extends QTIterable<T, E>, E> {
+  /* @internal */
+  private readonly _included: T;
+  /* @internal */
+  private readonly _excluded: T;
+
+  /* @internal */
+  private constructor(partition: [T, T]) {
+    this._included = partition[0];
+    this._excluded = partition[1];
+  }
+
+  /* @internal */
+  static [_makeInstance]<T extends QTIterable<T, E>, E>(partition: [T, T]): QTPartition<T, E> { return new QTPartition<T, E>(partition); }
+
+  get included(): T { return this._included; }
+  get excluded(): T { return this._excluded; }
+
+  withIncluded(func: (included: T) => void): this {
+    func(this.included);
+    return this;
+  }
+
+  withExcluded(func: (excluded: T) => void): this {
+    func(this.excluded);
+    return this;
+  }
+
+  /* @internal */
+  private partitionWith(iter: (e: E) => boolean, modInd: 0 | 1, base: T, other: T): QTPartition<T, E> {
+    let p: [T, T] = base[_partition](iter);
+    p[modInd] = p[modInd].joinWith(other);
+    return new QTPartition<T, E>(p);
+  }
+
+  partitionOut(iter: (e: E) => boolean): QTPartition<T, E> { return this.partitionWith(iter, 1, this.included, this.excluded); }
+  partitionIn(iter: (e: E) => boolean): QTPartition<T, E> { return this.partitionWith(iter, 0, this.included, this.excluded); }
+}
+
 export class QTIterable<T extends QTIterable<T, E>, E> {
+  /* @internal */
   protected _self: () => T;
+  /* @internal */
   protected _getter: (self: T) => E[];
+  /* @internal */
   protected _maker: (elements: E[]) => T;
 
-  constructor(self: () => T, getter: (self: T) => E[], maker: (elements: E[]) => T) {
+  /* @internal */
+  protected constructor(self: () => T, getter: (self: T) => E[], maker: (elements: E[]) => T) {
     this._self = self;
     this._getter = getter;
     this._maker = maker;
   }
 
+  /* @internal */
   private get self(): T { return this._self(); }
+  /* @internal */
   private getter(self: T): E[] { return this._getter(self); }
+  /* @internal */
   private maker(elements: E[]): T { return this._maker(elements); }
+  /* @internal */
+  private dualMaker(parts: [E[], E[]]): [T, T] { return [this.maker(parts[0]), this.maker(parts[1])]; }
 
   forEach(iter: (e: E) => void): this {
     _.each(this.toArray(), iter);
     return this;
   }
 
-  each(iter: (e: E) => void): this { return this.forEach((e: E) => { iter(e); }) }
+  each(iter: (e: E) => void): this { return this.forEach((e: E) => { iter(e); }); }
   map<R>(iter: (e: E) => R): R[] { return _.map(this.toArray(), iter); }
   flatMap<R>(iter: (e: E) => R): R[] { return _.flatMap(this.toArray(), iter); }
   some(iter: (e: E) => boolean): boolean { return _.some(this.toArray(), iter); }
@@ -179,17 +255,25 @@ export class QTIterable<T extends QTIterable<T, E>, E> {
   find(iter: (e: E) => boolean): E | undefined { return _.find(this.toArray(), iter); }
   findLast(iter: (e: E) => boolean): E | undefined { return _.findLast(this.toArray(), iter); }
   filter(iter: (e: E) => boolean): T { return this.maker(_.filter(this.toArray(), iter)); }
+  /* @internal */
+  [_partition](iter: (e: E) => boolean): [T, T] { return this.dualMaker(_.partition(this.toArray(), iter)); }
+  joinWith(...parts: T[]): T { return this.maker(_.flatMap(_.concat([], this.self, parts), p => p.toArray())); }
+  partition(iter: (e: E) => boolean): QTPartition<T, E> { return QTPartition[_makeInstance](this[_partition](iter)); }
   toArray(): E[] { return this.getter(this.self); }
 }
 
 export class Cell<T> {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _cellId: CellId;
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, cellId: CellId) {
     this._quickTable = quickTable;
     this._cellId = cellId;
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>, cellId: CellId): Cell<T> { return new Cell(quickTable, cellId); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -239,8 +323,11 @@ export class Cell<T> {
 }
 
 export class Cells<T> extends QTIterable<Cells<T>, Cell<T>> {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _cellIds: CellId[];
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, cellIds: (CellId | Cell<T> | Cells<T>)[]) {
     super(() => this, (c: Cells<T>) => c.cells, (e: Cell<T>[]) => Cells[_makeInstance](this.quickTable, e));
     this._quickTable = quickTable;
@@ -251,6 +338,7 @@ export class Cells<T> extends QTIterable<Cells<T>, Cell<T>> {
     });
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>, cellIds: (CellId | Cell<T> | Cells<T>)[]): Cells<T> { return new Cells(quickTable, cellIds); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -265,8 +353,11 @@ export class Cells<T> extends QTIterable<Cells<T>, Cell<T>> {
 }
 
 export class Column<T> extends EventEmitter {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _columnId: ColumnId;
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, columnId: ColumnId) {
     super();
     this._quickTable = quickTable;
@@ -274,6 +365,7 @@ export class Column<T> extends EventEmitter {
     this.forward('column.visible', this.quickTable);
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>, columnId: ColumnId): Column<T> { return new Column(quickTable, columnId); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -306,8 +398,11 @@ export class Column<T> extends EventEmitter {
 }
 
 export class Columns<T> extends QTIterable<Columns<T>, Column<T>> {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _columnIds: ColumnId[];
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, columnIds: (ColumnId | Column<T> | Columns<T>)[]) {
     super(() => this, (c: Columns<T>) => c.columns, (e: Column<T>[]) => Columns[_makeInstance](this.quickTable, e));
     this._quickTable = quickTable;
@@ -318,6 +413,7 @@ export class Columns<T> extends QTIterable<Columns<T>, Column<T>> {
     });
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>, columnIds: (ColumnId | Column<T> | Columns<T>)[]): Columns<T> { return new Columns(quickTable, columnIds); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -340,15 +436,20 @@ export class Columns<T> extends QTIterable<Columns<T>, Column<T>> {
 }
 
 export class Row<T> extends EventEmitter {
+  /* @internal */
   private readonly _cells: Map<Cell<T>> = {};
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _rowId: RowId;
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, rowId: RowId) {
     super();
     this._quickTable = quickTable;
     this._rowId = rowId;
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>, rowId: RowId): Row<T> { return new Row(quickTable, rowId); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -393,8 +494,11 @@ export class Row<T> extends EventEmitter {
 }
 
 export class Rows<T> extends QTIterable<Rows<T>, Row<T>> {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _rowIds: RowId[];
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, rowIds: (RowId | Row<T> | Rows<T>)[]) {
     super(() => this, (r: Rows<T>) => r.rows, (e: Row<T>[]) => Rows[_makeInstance](this.quickTable, e));
     this._quickTable = quickTable;
@@ -405,6 +509,7 @@ export class Rows<T> extends QTIterable<Rows<T>, Row<T>> {
     });
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>, rowIds: (RowId | Row<T> | Rows<T>)[]): Rows<T> { return new Rows(quickTable, rowIds); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -424,13 +529,17 @@ export class Rows<T> extends QTIterable<Rows<T>, Row<T>> {
 }
 
 export class QTDo<T, S> {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private readonly _selection: S | null;
+  /* @internal */
   private constructor(quickTable: QuickTable<T>, selection: S | null) {
     this._quickTable = quickTable;
     this._selection = selection;
   }
 
+  /* @internal */
   static [_makeInstance]<T, S>(quickTable: QuickTable<T>, selection: S | null) { return new QTDo<T, S>(quickTable, selection); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -440,11 +549,14 @@ export class QTDo<T, S> {
 }
 
 export class QTWhen<T> {
+  /* @internal */
   private readonly _quickTable: QuickTable<T>;
+  /* @internal */
   private constructor(quickTable: QuickTable<T>) {
     this._quickTable = quickTable;
   }
 
+  /* @internal */
   static [_makeInstance]<T>(quickTable: QuickTable<T>) { return new QTWhen(quickTable); }
 
   get quickTable(): QuickTable<T> { return this._quickTable; }
@@ -456,19 +568,33 @@ export class QTWhen<T> {
 }
 
 export class QuickTable<T> extends EventEmitter {
+  /* @internal */
   private readonly _table: JQuery;
+  /* @internal */
   private readonly _columns: Map<Column<T>> = {};
+  /* @internal */
   private readonly _rows: Map<Row<T>> = {};
+  /* @internal */
   private _columnDefs: ColumnDef<T>[] = [];
+  /* @internal */
   private _data: string[][] | T[] = [];
+  /* @internal */
   private _when: QTWhen<T> = QTWhen[_makeInstance](this);
+  /* @internal */
   private _emptyMessage: string = 'No Data';
+  /* @internal */
   private _loadingMessage: string = 'Loading...';
+  /* @internal */
   private _loading: boolean = true;
-  autoDraw: boolean = true;
-  clearOnLoad: boolean = true;
-  id: any = null;
+  /* @internal */
+  private _autoDraw: boolean = true;
+  /* @internal */
+  private _clearOnLoad: boolean = true;
+  /* @internal */
+  private _id: any = null;
+  /* @internal */
   private readonly _inInit: boolean = false;
+  /* @internal */
   private constructor(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null) {
     super();
     this._table = $(table);
@@ -480,7 +606,15 @@ export class QuickTable<T> extends EventEmitter {
     if(this.autoDraw) { this.draw(); }
   }
 
+  /* @internal */
   static [_makeInstance]<T>(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null): QuickTable<T> { return new QuickTable(table, initFunc); }
+
+  get autoDraw(): boolean { return this._autoDraw; }
+  set autoDraw(autoDraw: boolean) { this._autoDraw = autoDraw; }
+  get clearOnLoad(): boolean { return this._clearOnLoad; }
+  set clearOnLoad(clearOnLoad: boolean) { this._clearOnLoad = clearOnLoad; }
+  get id(): any { return this._id; }
+  set id(id: any) { this._id = id; }
 
   chain(func: (table: this) => void): this {
     func(this);
@@ -685,10 +819,13 @@ export class QuickTable<T> extends EventEmitter {
   }
 }
 
+/* @internal */
 const _addTable = Symbol('addTable');
 
 export class QuickTables<T> extends QTIterable<QuickTables<T>, QuickTable<T>> {
+  /* @internal */
   private readonly _tables: QuickTable<T>[] = [];
+  /* @internal */
   private constructor(tables: (QuickTable<T> | QuickTables<T>)[] = []) {
     super(() => this, (t: QuickTables<T>) => t.tables, (e: QuickTable<T>[]) => QuickTables[_makeInstance](e));
     this._tables = _.flatMap(_.flatten([tables]), t => {
@@ -697,6 +834,7 @@ export class QuickTables<T> extends QTIterable<QuickTables<T>, QuickTable<T>> {
     });
   }
 
+  /* @internal */
   static [_makeInstance]<T>(tables: QuickTable<T>[] = []): QuickTables<T> { return new QuickTables(tables); }
 
   get tables(): QuickTable<T>[] { return _.clone(this._tables); }
@@ -706,6 +844,7 @@ export class QuickTables<T> extends QTIterable<QuickTables<T>, QuickTable<T>> {
   getAll(...indexes: number[]): QuickTables<T> { return new QuickTables(_.filter(_.map(indexes, i => this.get(i)))); }
   getAllById(...ids: any[]): QuickTables<T> { return new QuickTables(_.filter(_.map(ids, i => this.getById(i))) as QuickTable<T>[]); }
 
+  /* @internal */
   [_addTable](table: QuickTable<T>): void {
     if(table instanceof QuickTable) {
       this._tables.push(table);
