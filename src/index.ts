@@ -218,6 +218,11 @@ export class QTPartition<T extends QTIterable<T, E>, E> {
   partitionIn(iter: (e: E) => boolean): QTPartition<T, E> { return this.partitionWith(iter, 0, this.included, this.excluded); }
 }
 
+export declare type QTColumnPartition<T> = QTPartition<Columns<T>, Column<T>>;
+export declare type QTRowPartition<T> = QTPartition<Rows<T>, Row<T>>;
+export declare type QTCellPartition<T> = QTPartition<Cells<T>, Cell<T>>;
+export declare type QTTablePartition<T> = QTPartition<QuickTables<T>, QuickTable<T>>;
+
 export class QTIterable<T extends QTIterable<T, E>, E> {
   /* @internal */
   protected _self: () => T;
