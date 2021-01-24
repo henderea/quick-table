@@ -12,7 +12,8 @@
         "types": [
             "jquery",
             "lodash"
-        ]
+        ],
+        "stripInternal": true
     },
     "include": [
         "src"

@@ -9,6 +9,7 @@ export interface JQueryQuickTable {
   cellId(row: number | RowId | CellId, column?: number | ColumnId, isHead?: boolean): CellId
 }
 
+/* @internal */
 declare global {
   interface JQuery {
     QuickTable: JQueryQuickTable;
