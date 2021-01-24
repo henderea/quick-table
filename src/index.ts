@@ -264,6 +264,12 @@ export class QTIterable<T extends QTIterable<T, E>, E> {
   [_partition](iter: (e: E) => boolean): [T, T] { return this.dualMaker(_.partition(this.toArray(), iter)); }
   joinWith(...parts: T[]): T { return this.maker(_.flatMap(_.concat([], this.self, parts), p => p.toArray())); }
   partition(iter: (e: E) => boolean): QTPartition<T, E> { return QTPartition[_makeInstance](this[_partition](iter)); }
+  partitionOutOver<I>(list: I[], iter: (e: E, l: I, i: number) => boolean): QTPartition<T, E> {
+    return _.reduce(list, (p: QTPartition<T, E>, l: I, i: number) => p.partitionOut((e: E) => iter(e, l, i)), this.partition(() => true));
+  }
+  partitionInOver<I>(list: I[], iter: (e: E, l: I, i: number) => boolean): QTPartition<T, E> {
+    return _.reduce(list, (p: QTPartition<T, E>, l: I, i: number) => p.partitionIn((e: E) => iter(e, l, i)), this.partition(() => false));
+  }
   toArray(): E[] { return this.getter(this.self); }
 }
 
