@@ -211,7 +211,7 @@ export class QTPartition<T extends QTIterable<T, E>, E> {
   /* @internal */
   private partitionWith(iter: (e: E) => boolean, modInd: 0 | 1, base: T, other: T): QTPartition<T, E> {
     let p: [T, T] = base[_partition](iter);
-    p[modInd] = p[modInd].joinWith(other);
+    p[modInd] = other.joinWith(p[modInd]);
     return new QTPartition<T, E>(p);
   }
 
