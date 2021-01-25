@@ -914,6 +914,8 @@ function getCellData<T>(def: ColumnDef<T>, d: T): any {
   return fieldData;
 }
 
+export declare type SortDef = [number, 'asc' | 'desc'];
+
 export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private readonly _table: JQuery;
@@ -930,7 +932,7 @@ export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private _dataSorted: boolean = false;
   /* @internal */
-  private _sortOrders: Array<[number, 'asc' | 'desc']> = [];
+  private _sortOrders: SortDef[] = [];
   /* @internal */
   private _when: QTWhen<T> = QTWhen[_makeInstance](this);
   /* @internal */
@@ -1003,8 +1005,8 @@ export class QuickTable<T> extends EventEmitter {
     }
   }
 
-  get sortOrders(): Array<[number, 'asc' | 'desc']> { return this._sortOrders; }
-  set sortOrders(sortOrders: Array<[number, 'asc' | 'desc']>) {
+  get sortOrders(): SortDef[] { return this._sortOrders; }
+  set sortOrders(sortOrders: SortDef[]) {
     this._sortOrders = sortOrders;
     this._dataSorted = false;
   }
@@ -1012,17 +1014,17 @@ export class QuickTable<T> extends EventEmitter {
   toggleSort(columnIndex: number): this {
     if(columnIndex >= this.columnCount) { return this; }
     this._dataSorted = false;
-    const existingOrder: [number, 'asc' | 'desc'] | undefined = _.find(this.sortOrders, (o: [number, 'asc' | 'desc']) => o[0] == columnIndex);
+    const existingOrder: SortDef | undefined = _.find(this.sortOrders, (o: SortDef) => o[0] == columnIndex);
     const newOrder: 'asc' | 'desc' = existingOrder && existingOrder[1] == 'asc' ? 'desc' : 'asc';
     return this.addSort(columnIndex, newOrder);
   }
 
   addSort(columnIndex: number, order: 'asc' | 'desc' = 'asc'): this {
-    const existingOrderIndex: number = _.findIndex(this.sortOrders, (o: [number, 'asc' | 'desc']) => o[0] == columnIndex);
+    const existingOrderIndex: number = _.findIndex(this.sortOrders, (o: SortDef) => o[0] == columnIndex);
     if(existingOrderIndex == 0 && this.sortOrders[0][1] == order) { return this; }
     this._dataSorted = false;
-    this.sortOrders = _.remove(this.sortOrders, (o: [number, 'asc' | 'desc']) => o[0] == columnIndex);
-    const newOrder: [number, 'asc' | 'desc'] = [columnIndex, order];
+    this.sortOrders = _.filter(this.sortOrders, (o: SortDef) => o[0] !== columnIndex);
+    const newOrder: SortDef = [columnIndex, order];
     this.sortOrders = _.concat([newOrder], this.sortOrders);
     this.sortData();
     if(this.autoDraw) { this.draw(); }
@@ -1150,7 +1152,7 @@ export class QuickTable<T> extends EventEmitter {
       this._sortedData = _.clone(this._data);
       (this._sortedData as string[][]).sort((a: string[], b: string[]) => {
         for(let i: number = 0; i < this.sortOrders.length; i++) {
-          let sortOrder: [number, 'asc' | 'desc'] = this.sortOrders[i];
+          let sortOrder: SortDef = this.sortOrders[i];
           let colInd: number = sortOrder[0];
           if(colInd < a.length && colInd < b.length) {
             const cellA: string = a[colInd];
@@ -1166,7 +1168,7 @@ export class QuickTable<T> extends EventEmitter {
       this._sortedData = _.clone(this._data);
       (this._sortedData as T[]).sort((a: T, b: T) => {
         for(let i: number = 0; i < this.sortOrders.length; i++) {
-          let sortOrder: [number, 'asc' | 'desc'] = this.sortOrders[i];
+          let sortOrder: SortDef = this.sortOrders[i];
           let colInd: number = sortOrder[0];
           if(colInd < colDefs.length) {
             let def: ColumnDef<T> = colDefs[colInd];
