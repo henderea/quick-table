@@ -898,8 +898,8 @@ function createSearch(search: string, regex: boolean = false, smart: boolean = t
 }
 
 /* @internal */
-function checkFilter<T>(f: RegExp, c: Cell<T> | null): boolean {
-  return !f || !c || f.test(c.textData);
+function checkFilter<T>(f: RegExp, c: Cell<T> | null, columnDef: ColumnDef<T> | null | undefined): boolean {
+  return !f || !c || types.matches(columnDef && columnDef.type, f, c.textData);
 }
 
 /* @internal */
@@ -1045,7 +1045,7 @@ export class QuickTable<T> extends EventEmitter {
 
   applyFilters(): this {
     this.rows
-        .partitionOutOver(this.filters, (r: Row<T>, f: RegExp, i: number) => checkFilter(f, r.cell(i)))
+        .partitionOutOver(this.filters, (r: Row<T>, f: RegExp, i: number) => checkFilter(f, r.cell(i), this.columnDefs[i]))
         .withIncluded(r => r.visible = true)
         .withExcluded(r => r.visible = false);
     return this;
@@ -1174,7 +1174,7 @@ export class QuickTable<T> extends EventEmitter {
             let def: ColumnDef<T> = colDefs[colInd];
             const cellA: any = getCellData(def, a);
             const cellB: any = getCellData(def, b);
-            const comp: number = types.compare(null, cellA, cellB) * (sortOrder[1] == 'desc' ? -1 : 1);
+            const comp: number = types.compare(def.type, cellA, cellB) * (sortOrder[1] == 'desc' ? -1 : 1);
             if(comp != 0) { return comp; }
           }
         }
