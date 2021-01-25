@@ -281,34 +281,38 @@ export class TypeManager {
 
 /* @internal */
 const types: TypeManager = TypeManager[_makeInstance]();
-types
-  .defineType('date', {
-    preSort(data: any): any {
-      if(!_.isString(data)) { return data; }
-      let ts: number = Date.parse(data);
-      return _.isNaN(ts) ? -Infinity : ts;
-    }
-  })
-  .defineType('string', {})
-  .defineType('html', {
-    preSort: (data: any) => stripHtml(stringify(data)),
-    preFilter: (data: any) => stripHtml(stringify(data))
-  })
-  .defineType('num', {
-    preSort(data: any): any {
-      if(_.isNil(data)) { return -Infinity; }
-      let v: number = parseFloat(String(data));
-      return _.isNaN(v) ? -Infinity : v;
-    }
-  })
-  .defineType('html-num', {
-    preSort(data: any): any {
-      if(_.isNil(data)) { return -Infinity; }
-      let v: number = parseFloat(String(stripHtml(stringify(data))));
-      return _.isNaN(v) ? -Infinity : v;
-    },
-    preFilter: (data: any) => stripHtml(stringify(data))
-  });
+
+/* @internal */
+function setupDefaultTypes(): void {
+  types
+    .defineType('date', {
+      preSort(data: any): any {
+        if(!_.isString(data)) { return data; }
+        let ts: number = Date.parse(data);
+        return _.isNaN(ts) ? -Infinity : ts;
+      }
+    })
+    .defineType('string', {})
+    .defineType('html', {
+      preSort: (data: any) => stripHtml(stringify(data)),
+      preFilter: (data: any) => stripHtml(stringify(data))
+    })
+    .defineType('num', {
+      preSort(data: any): any {
+        if(_.isNil(data)) { return -Infinity; }
+        let v: number = parseFloat(String(data));
+        return _.isNaN(v) ? -Infinity : v;
+      }
+    })
+    .defineType('html-num', {
+      preSort(data: any): any {
+        if(_.isNil(data)) { return -Infinity; }
+        let v: number = parseFloat(String(stripHtml(stringify(data))));
+        return _.isNaN(v) ? -Infinity : v;
+      },
+      preFilter: (data: any) => stripHtml(stringify(data))
+    });
+}
 
 export declare interface ColumnDef<T> {
   cellType?: string;
@@ -1318,6 +1322,7 @@ export class QuickTables<T> extends QTIterable<QuickTables<T>, QuickTable<T>> {
 export function setup(jQuery: JQueryStatic, lodash: LoDashStatic) {
   $ = jQuery;
   _ = lodash;
+  setupDefaultTypes();
   let qt: any = function <T>(this: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null): QuickTable<T> | QuickTables<T> {
     let tables: QuickTables<T> = QuickTables[_makeInstance]();
     this.filter('table').each(function(this: any) {
