@@ -899,7 +899,7 @@ function createSearch(search: string, regex: boolean = false, smart: boolean = t
 
 /* @internal */
 function checkFilter<T>(f: RegExp, c: Cell<T> | null, columnDef: ColumnDef<T> | null | undefined): boolean {
-  return !f || !c || types.matches(columnDef && columnDef.type, f, c.textData);
+  return !f || !c || types.matches(columnDef && columnDef.type, f, c.data);
 }
 
 /* @internal */
