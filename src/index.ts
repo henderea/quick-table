@@ -1,7 +1,6 @@
 import { LoDashStatic } from 'lodash';
 
-/* @internal */
-declare type Listener = (...args: any[]) => any;
+export declare type Listener = (...args: any[]) => any;
 
 export interface JQueryQuickTable {
   <T>(initFunc?: ((table: QuickTable<T>) => void) | null): QuickTable<T> | QuickTables<T>;
