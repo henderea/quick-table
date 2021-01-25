@@ -1,12 +1,14 @@
 import { LoDashStatic } from 'lodash';
 
+/* @internal */
 declare type Listener = (...args: any[]) => any;
 
 export interface JQueryQuickTable {
   <T>(initFunc?: ((table: QuickTable<T>) => void) | null): QuickTable<T> | QuickTables<T>;
   columnId(column: number | ColumnId): ColumnId;
   rowId(row: number | RowId, isHead?: boolean): RowId;
-  cellId(row: number | RowId | CellId, column?: number | ColumnId, isHead?: boolean): CellId
+  cellId(row: number | RowId | CellId, column?: number | ColumnId, isHead?: boolean): CellId;
+  types: TypeManager;
 }
 
 /* @internal */
@@ -28,13 +30,290 @@ declare interface Map<V> {
 }
 
 /* @internal */
+declare interface List<V> {
+  readonly length: number;
+  readonly [key: number]: V;
+}
+
+/* @internal */
+declare type Many<T> = T | ReadonlyArray<T>;
+
+/* @internal */
+declare type Unwrappable<T> = T | ((...args: any[]) => T);
+
+/* @internal */
+function unwrap<T>(val: Unwrappable<T>, ...params: any[]): T {
+  if(_.isFunction(val)) {
+    return (val as Function)(...params);
+  } else {
+    return val as T;
+  }
+}
+
+// region stripHtml
+/* @internal */
+class ParseContext {
+  _context = {
+    depth: 0,
+    quote: false,
+    comment: false,
+    tagBuffer: '',
+    ending: false,
+    buffer: ''
+  };
+
+  constructor() {}
+
+  get depth(): number { return this._context.depth; }
+
+  get quote(): boolean | string { return this._context.quote; }
+
+  get comment(): boolean { return this._context.comment; }
+
+  tagBuffer(slice: number = 0): string { return this._context.tagBuffer.slice(slice); }
+
+  get ending(): boolean { return this._context.ending; }
+
+  get buffer(): string { return this._context.buffer.slice(0); }
+
+  get quoteOrComment(): boolean { return (!!this.quote) || this.comment; }
+
+  get inHtml(): boolean { return this.depth > 0; }
+
+  set<T>(name: string, val: T | ((value: T, context?: this) => T)): this {
+    (this._context as any)[name] = unwrap(val, (this._context as any)[name] as T, this);
+    return this;
+  }
+
+  add(name: string, val: number | string): this {
+    return this.set(name, (v: any) => v + val);
+  }
+
+  prepare(): void {
+    this.set('ending', false);
+    this.set('buffer', '');
+  }
+
+  toString(): string {
+    return this._context.toString();
+  }
+}
+
+/* @internal */
+declare type ParseConditionInternal = {
+  cond: (context: ParseContext, c?: string) => boolean,
+  act?: (context: ParseContext, c?: string) => void,
+  subs?: Many<ParseConditionInternal>
+}
+
+/* @internal */
+declare type ParseCondition = {
+  char: string | RegExp,
+  subs: Many<ParseConditionInternal>
+}
+
+/* @internal */
+function subCond(c: string, cond: ParseCondition | ParseConditionInternal, context: ParseContext) {
+  if(cond) {
+    if((<ParseConditionInternal>cond).act) {
+      ((<ParseConditionInternal>cond).act as (context: ParseContext, c?: string) => void)(context, c);
+    }
+    if(cond.subs) {
+      subCond(c, _.find(_.flatten([cond.subs] as List<Many<ParseConditionInternal>>), sub => sub.cond(context, c)) as ParseConditionInternal, context);
+    }
+  }
+}
+
+/* @internal */
+function sw(c: string, context: ParseContext, conds: List<ParseCondition>) {
+  subCond(c, _.find(conds, cond => _.isRegExp(cond.char) ? (<RegExp>cond.char).test(c) : (<string>cond.char).includes(c)) as ParseCondition, context);
+}
+
+/* @internal */
+function stripHtml(str: string | null | undefined): string {
+  if(_.isNil(str)) { return ''; }
+  let context: ParseContext = new ParseContext();
+
+  let conds: List<ParseCondition> = [
+    {
+      char: '<',
+      subs: {
+        cond: ctx => !ctx.quoteOrComment,
+        act: ctx => ctx.add('depth', 1)
+      }
+    },
+    {
+      char: '>',
+      subs: [
+        {
+          cond: ctx => !ctx.quoteOrComment && ctx.inHtml,
+          act: ctx => ctx.add('depth', -1).set('ending', true)
+        },
+        {
+          cond: ctx => ctx.comment && ctx.tagBuffer(-2) == '--',
+          act: ctx => ctx.set('comment', false).set('ending', true)
+        }
+      ]
+    },
+    {
+      char: `"'`,
+      subs: {
+        cond: ctx => !ctx.comment && ctx.inHtml,
+        subs: [
+          {
+            cond: ctx => !ctx.quote,
+            act: (ctx, c) => ctx.set('quote', c)
+          },
+          {
+            cond: (ctx, c) => ctx.quote == c,
+            act: ctx => ctx.set('quote', false).set('ending', true)
+          }
+        ]
+      }
+    },
+    {
+      char: '-',
+      subs: {
+        cond: ctx => !ctx.comment && ctx.inHtml && ctx.tagBuffer(-3) == '<!-',
+        act: ctx => ctx.add('depth', -1).set('comment', true)
+      }
+    },
+    {
+      char: /\s/,
+      subs: {
+        cond: ctx => ctx.tagBuffer() == '<',
+        act: ctx => ctx.add('depth', -1).set('tagBuffer', '').add('buffer', '<')
+      }
+    }
+  ];
+  return _.reduce(str.split(''), (r: string, c: string) => {
+    context.prepare();
+    sw(c, context, conds);
+    r += context.buffer;
+    if(context.inHtml || context.comment || context.ending) {
+      context.add('tagBuffer', c);
+      return r;
+    } else {
+      context.set('tagBuffer', '');
+      return r + c;
+    }
+  }, '');
+}
+
+//endregion
+
+export declare interface TypeDefinition {
+  preSort?: (data: any) => any;
+  preFilter?: (data: any) => string;
+  compare?: (a: any, b: any) => number;
+  render?: (data: any) => string;
+}
+
+/* @internal */
+function stringify(v: any | null | undefined): string | null | undefined {
+  if(_.isNil(v)) { return v; }
+  if(_.isBoolean(v)) { return v ? 'true' : 'false'; }
+  return String(v);
+}
+
+/* @internal */
+function basicCompare(a: any, b: any): number {
+  if(_.isNil(a) && _.isNil(b)) { return 0; }
+  if(_.isNil(a)) { return 1; }
+  if(_.isNil(b)) { return -1; }
+  if(_.lt(a, b)) { return -1; }
+  if(_.gt(a, b)) { return 1; }
+  return 0;
+}
+
+/* @internal */
+function defaultCompare(a: any, b: any): number {
+  return basicCompare(stringify(a), stringify(b));
+}
+
+/* @internal */
 const _makeInstance = Symbol('makeInstance');
 /* @internal */
 const _setFilter = Symbol('setFilter');
 
+export class TypeManager {
+  /* @internal */
+  private readonly _types: Map<TypeDefinition> = {};
+  /* @internal */
+  private constructor() {}
+
+  /* @internal */
+  static [_makeInstance](): TypeManager { return new TypeManager(); }
+
+  defineType(name: string, typeDef: TypeDefinition): this {
+    this._types[name] = _.extend({}, this._types[name], typeDef);
+    return this;
+  }
+
+  compare(type: string | null | undefined, a: any, b: any): number {
+    if(_.isNil(type)) { return defaultCompare(a, b); }
+    const typeDef: TypeDefinition | undefined = this._types[type];
+    if(!typeDef) { return defaultCompare(a, b); }
+    const preProcess: boolean = _.isFunction(typeDef.preSort);
+    if(_.isFunction(typeDef.preSort)) {
+      a = typeDef.preSort(a);
+      b = typeDef.preSort(b);
+    }
+    if(_.isFunction(typeDef.compare)) { return typeDef.compare(a, b); }
+    if(preProcess) { return basicCompare(a, b); }
+    return defaultCompare(a, b);
+  }
+
+  render(type: string | null | undefined, data: any): string {
+    if(_.isNil(type)) { return stringify(data) || ''; }
+    const typeDef: TypeDefinition | undefined = this._types[type];
+    if(!typeDef || !_.isFunction(typeDef.render)) { return stringify(data) || ''; }
+    return typeDef.render(data) || '';
+  }
+
+  matches(type: string | null | undefined, r: RegExp, data: any): boolean {
+    if(_.isNil(type)) { return r.test(stringify(data) || ''); }
+    const typeDef: TypeDefinition | undefined = this._types[type];
+    if(typeDef && _.isFunction(typeDef.preFilter)) { data = typeDef.preFilter(data); }
+    return r.test(stringify(data) || '');
+  }
+}
+
+/* @internal */
+const types: TypeManager = TypeManager[_makeInstance]();
+types
+  .defineType('date', {
+    preSort(data: any): any {
+      if(!_.isString(data)) { return data; }
+      let ts: number = Date.parse(data);
+      return _.isNaN(ts) ? -Infinity : ts;
+    }
+  })
+  .defineType('string', {})
+  .defineType('html', {
+    preSort: (data: any) => stripHtml(stringify(data)),
+    preFilter: (data: any) => stripHtml(stringify(data))
+  })
+  .defineType('num', {
+    preSort(data: any): any {
+      if(_.isNil(data)) { return -Infinity; }
+      let v: number = parseFloat(String(data));
+      return _.isNaN(v) ? -Infinity : v;
+    }
+  })
+  .defineType('html-num', {
+    preSort(data: any): any {
+      if(_.isNil(data)) { return -Infinity; }
+      let v: number = parseFloat(String(stripHtml(stringify(data))));
+      return _.isNaN(v) ? -Infinity : v;
+    },
+    preFilter: (data: any) => stripHtml(stringify(data))
+  });
+
 export declare interface ColumnDef<T> {
   cellType?: string;
   data?: string;
+  type?: string;
   render?: (data: any, row: T) => string;
   html?: boolean;
   cssClass?: string;
@@ -305,12 +584,12 @@ export class Cell<T> {
   get textData(): string { return this.$.text(); }
   set textData(textData: string) { this.$.text(textData); }
   get data(): any {
-    if(this.quickTable.rawData && this.quickTable.rawData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
+    if(this.quickTable.rawSortedData && this.quickTable.rawSortedData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
       const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
       if(typeof def.render == 'function') {
         return this.textData;
       }
-      const d: T = this.quickTable.rawData[this.rowIndex] as T;
+      const d: T = this.quickTable.rawSortedData[this.rowIndex] as T;
       let fieldData: any = null;
       if(def.data) {
         fieldData = (d as Map<any>)[def.data];
@@ -320,8 +599,8 @@ export class Cell<T> {
     return this.textData;
   }
   get rawData(): any {
-    if(this.quickTable.rawData && this.quickTable.rawData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
-      const d: T = this.quickTable.rawData[this.rowIndex] as T;
+    if(this.quickTable.rawSortedData && this.quickTable.rawSortedData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
+      const d: T = this.quickTable.rawSortedData[this.rowIndex] as T;
       const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
       let fieldData: any = null;
       if(def.data) {
@@ -511,8 +790,8 @@ export class Row<T> extends EventEmitter {
   get cellData(): any[] { return this.cells.data; }
   get cellRawData(): any[] { return this.cells.rawData; }
   get data(): string[] | T {
-    if(this.quickTable.rawData && this.quickTable.rawData.length > this.index) {
-      return this.quickTable.rawData[this.index];
+    if(this.quickTable.rawSortedData && this.quickTable.rawSortedData.length > this.index) {
+      return this.quickTable.rawSortedData[this.index];
     }
     return this.cellHtmlData;
   }
@@ -619,6 +898,18 @@ function checkFilter<T>(f: RegExp, c: Cell<T> | null): boolean {
   return !f || !c || f.test(c.textData);
 }
 
+/* @internal */
+function getCellData<T>(def: ColumnDef<T>, d: T): any {
+  let fieldData: any = null;
+  if(def.data) {
+    fieldData = (d as Map<any>)[def.data];
+  }
+  if(typeof def.render == 'function') {
+    fieldData = def.render(fieldData, d);
+  }
+  return fieldData;
+}
+
 export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private readonly _table: JQuery;
@@ -630,6 +921,12 @@ export class QuickTable<T> extends EventEmitter {
   private _columnDefs: ColumnDef<T>[] = [];
   /* @internal */
   private _data: string[][] | T[] = [];
+  /* @internal */
+  private _sortedData: string[][] | T[] = [];
+  /* @internal */
+  private _dataSorted: boolean = false;
+  /* @internal */
+  private _sortOrders: Array<[number, 'asc' | 'desc']> = [];
   /* @internal */
   private _when: QTWhen<T> = QTWhen[_makeInstance](this);
   /* @internal */
@@ -702,9 +999,36 @@ export class QuickTable<T> extends EventEmitter {
     }
   }
 
+  get sortOrders(): Array<[number, 'asc' | 'desc']> { return this._sortOrders; }
+  set sortOrders(sortOrders: Array<[number, 'asc' | 'desc']>) {
+    this._sortOrders = sortOrders;
+    this._dataSorted = false;
+  }
+
+  toggleSort(columnIndex: number): this {
+    if(columnIndex >= this.columnCount) { return this; }
+    this._dataSorted = false;
+    const existingOrder: [number, 'asc' | 'desc'] | undefined = _.find(this.sortOrders, (o: [number, 'asc' | 'desc']) => o[0] == columnIndex);
+    const newOrder: 'asc' | 'desc' = existingOrder && existingOrder[1] == 'asc' ? 'desc' : 'asc';
+    return this.addSort(columnIndex, newOrder);
+  }
+
+  addSort(columnIndex: number, order: 'asc' | 'desc' = 'asc'): this {
+    const existingOrderIndex: number = _.findIndex(this.sortOrders, (o: [number, 'asc' | 'desc']) => o[0] == columnIndex);
+    if(existingOrderIndex == 0 && this.sortOrders[0][1] == order) { return this; }
+    this._dataSorted = false;
+    this.sortOrders = _.remove(this.sortOrders, (o: [number, 'asc' | 'desc']) => o[0] == columnIndex);
+    const newOrder: [number, 'asc' | 'desc'] = [columnIndex, order];
+    this.sortOrders = _.concat([newOrder], this.sortOrders);
+    this.sortData();
+    if(this.autoDraw) { this.draw(); }
+    return this;
+  }
+
   /* @internal */
   private get filters(): RegExp[] { return this._filters; }
 
+  /* @internal */
   [_setFilter](columnIndex: number, filter: string, regex: boolean = false, smart: boolean = true, caseInsensitive: boolean = true): void {
     while(this.filters.length < this.columnCount) {
       this.filters.push(createSearch(''));
@@ -793,9 +1117,16 @@ export class QuickTable<T> extends EventEmitter {
   }
 
   get rawData(): string[][] | T[] { return this._data; }
+  get rawSortedData(): string[][] | T[] { return this._sortedData; }
   get data(): string[][] | T[] | null {
     if(this._data && this._data.length > 0) {
       return this._data;
+    }
+    return this.cellTextData;
+  }
+  get sortedData(): string[][] | T[] | null {
+    if(this._sortedData && this._sortedData.length > 0) {
+      return this._sortedData;
     }
     return this.cellTextData;
   }
@@ -803,9 +1134,56 @@ export class QuickTable<T> extends EventEmitter {
   get cellHtmlData(): string[][] { return this.rows.cellHtmlData; }
   get cellTextData(): string[][] { return this.rows.cellTextData; }
 
+  sortData(forceSort: boolean = false): this {
+    if(this._dataSorted && !forceSort) { return this; }
+    if(!this._data || this._data.length == 0) {
+      this._sortedData = [];
+      return this;
+    }
+    let colDefs: ColumnDef<T>[] = this.columnDefs;
+    if(!colDefs || colDefs.length == 0) {
+      // rows are arrays
+      this._sortedData = _.clone(this._data);
+      (this._sortedData as string[][]).sort((a: string[], b: string[]) => {
+        for(let i: number = 0; i < this.sortOrders.length; i++) {
+          let sortOrder: [number, 'asc' | 'desc'] = this.sortOrders[i];
+          let colInd: number = sortOrder[0];
+          if(colInd < a.length && colInd < b.length) {
+            const cellA: string = a[colInd];
+            const cellB: string = b[colInd];
+            const comp: number = types.compare(null, cellA, cellB);
+            if(comp != 0) { return comp; }
+          }
+        }
+        return 0;
+      });
+    } else {
+      // rows use columnDefs
+      this._sortedData = _.clone(this._data);
+      (this._sortedData as T[]).sort((a: T, b: T) => {
+        for(let i: number = 0; i < this.sortOrders.length; i++) {
+          let sortOrder: [number, 'asc' | 'desc'] = this.sortOrders[i];
+          let colInd: number = sortOrder[0];
+          if(colInd < colDefs.length) {
+            let def: ColumnDef<T> = colDefs[colInd];
+            const cellA: any = getCellData(def, a);
+            const cellB: any = getCellData(def, b);
+            const comp: number = types.compare(def.type, cellA, cellB);
+            if(comp != 0) { return comp; }
+          }
+        }
+        return 0;
+      });
+    }
+    this._dataSorted = true;
+    return this;
+  }
+
   set data(data: string[][] | T[] | null) {
+    this._dataSorted = false;
     if(!data || data.length == 0) {
       this._data = [];
+      this.sortData();
       if(this.autoDraw) { this.draw(); }
       return;
     }
@@ -823,11 +1201,13 @@ export class QuickTable<T> extends EventEmitter {
         throw `One or more data rows had a size below the column count of ${colCount}. Minimum data row size: ${minSize}`;
       }
       this._data = data;
+      this.sortData();
       if(this.autoDraw) { this.draw(); }
     } else if(colDefCount < colCount) {
       throw `Not enough columnDefs have been provided. Have ${colCount} columns, but only ${colDefCount} columnDefs.`;
     } else {
       this._data = data;
+      this.sortData();
       if(this.autoDraw) { this.draw(); }
     }
   }
@@ -848,11 +1228,12 @@ export class QuickTable<T> extends EventEmitter {
       return this.trigger('draw.empty');
     }
     this.loading = false;
+    this.sortData();
     let colDefs: ColumnDef<T>[] = this.columnDefs;
     let colCount: number = this.columnCount;
     if(!colDefs || colDefs.length == 0) {
       // rows are arrays
-      _.each(this._data, d => {
+      _.each(this._sortedData, d => {
         let $row: JQuery = $('<tr>');
         for(let i = 0; i < colCount; i++) {
           let $cell: JQuery = $('<td>');
@@ -863,7 +1244,7 @@ export class QuickTable<T> extends EventEmitter {
       });
     } else {
       // rows use columnDefs
-      _.each(this._data as T[], (d: T) => {
+      _.each(this._sortedData as T[], (d: T) => {
         let $row = $('<tr>');
         for(let i = 0; i < colCount; i++) {
           let def: ColumnDef<T> = colDefs[i];
@@ -957,6 +1338,7 @@ export function setup(jQuery: JQueryStatic, lodash: LoDashStatic) {
   qt.columnId = columnId;
   qt.rowId = rowId;
   qt.cellId = cellId;
+  qt.types = types;
 
   jQuery.fn.QuickTable = qt;
 }
