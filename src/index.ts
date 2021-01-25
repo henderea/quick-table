@@ -29,6 +29,8 @@ declare interface Map<V> {
 
 /* @internal */
 const _makeInstance = Symbol('makeInstance');
+/* @internal */
+const _setFilter = Symbol('setFilter');
 
 export declare interface ColumnDef<T> {
   cellType?: string;
@@ -407,6 +409,15 @@ export class Column<T> extends EventEmitter {
   get headerCells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.headerCellIds); }
   get bodyCells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.bodyCellIds); }
   get cells(): Cells<T> { return Cells[_makeInstance](this.quickTable, this.cellIds); }
+  setFilter(search: string, regex: boolean = false, smart: boolean = true, caseInsensitive: boolean = true): this {
+    this.quickTable[_setFilter](this.index, search, regex, smart, caseInsensitive);
+    return this;
+  }
+  resetFilter(): this { return this.setFilter(''); }
+  applyFilters(): this {
+    this.quickTable.applyFilters();
+    return this;
+  }
 }
 
 export class Columns<T> extends QTIterable<Columns<T>, Column<T>> {
@@ -583,6 +594,31 @@ export class QTWhen<T> {
   headerCell(row: number | RowId, column: number | ColumnId = 0): QTDo<T, Cell<T>> { return QTDo[_makeInstance](this.quickTable, this.quickTable.headerCell(row, column)); }
 }
 
+//based on DataTables
+/* @internal */
+function createSearch(search: string, regex: boolean = false, smart: boolean = true, caseInsensitive: boolean = true): RegExp {
+  if(!regex) { search = _.escapeRegExp(search); }
+  if(smart) {
+    const parts: string[] = _.map(search.match(/"[^"]+"|[^ ]+/g) || [''], (word: string) => {
+      if(word.charAt(0) === '"') {
+        const m: RegExpMatchArray | null = word.match(/^"(.*)"$/);
+        word = m ? m[1] : word;
+      }
+
+      return word.replace('"', '');
+    });
+
+    search = '^(?=.*?' + parts.join(')(?=.*?') + ').*$';
+  }
+
+  return new RegExp(search, caseInsensitive ? 'i' : '');
+}
+
+/* @internal */
+function checkFilter<T>(f: RegExp, c: Cell<T> | null): boolean {
+  return !f || !c || f.test(c.textData);
+}
+
 export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private readonly _table: JQuery;
@@ -610,6 +646,8 @@ export class QuickTable<T> extends EventEmitter {
   private _id: any = null;
   /* @internal */
   private readonly _inInit: boolean = false;
+  /* @internal */
+  private readonly _filters: RegExp[] = [];
   /* @internal */
   private constructor(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null) {
     super();
@@ -663,6 +701,32 @@ export class QuickTable<T> extends EventEmitter {
       if(this.autoDraw) { this.draw(); }
     }
   }
+
+  /* @internal */
+  private get filters(): RegExp[] { return this._filters; }
+
+  [_setFilter](columnIndex: number, filter: string, regex: boolean = false, smart: boolean = true, caseInsensitive: boolean = true): void {
+    while(this.filters.length < this.columnCount) {
+      this.filters.push(createSearch(''));
+    }
+    if(columnIndex >= this.columnCount) { return; }
+    this.filters[columnIndex] = createSearch(filter, regex, smart, caseInsensitive);
+  }
+
+  applyFilters(): this {
+    this.rows
+        .partitionOutOver(this.filters, (r: Row<T>, f: RegExp, i: number) => checkFilter(f, r.cell(i)))
+        .withIncluded(r => r.visible = true)
+        .withExcluded(r => r.visible = false);
+    return this;
+  }
+
+  resetFilters(): this {
+    _.times(this.columnCount, (i: number) => this[_setFilter](i, ''));
+    return this;
+  }
+
+  clearFilters(): this { return this.resetFilters().applyFilters(); }
 
   get when(): QTWhen<T> { return this._when; }
   get $(): JQuery { return this._table; }
