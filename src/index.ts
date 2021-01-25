@@ -1157,7 +1157,7 @@ export class QuickTable<T> extends EventEmitter {
           if(colInd < a.length && colInd < b.length) {
             const cellA: string = a[colInd];
             const cellB: string = b[colInd];
-            const comp: number = types.compare(null, cellA, cellB);
+            const comp: number = types.compare(null, cellA, cellB) * (sortOrder[1] == 'desc' ? -1 : 1);
             if(comp != 0) { return comp; }
           }
         }
@@ -1174,7 +1174,7 @@ export class QuickTable<T> extends EventEmitter {
             let def: ColumnDef<T> = colDefs[colInd];
             const cellA: any = getCellData(def, a);
             const cellB: any = getCellData(def, b);
-            const comp: number = types.compare(def.type, cellA, cellB);
+            const comp: number = types.compare(null, cellA, cellB) * (sortOrder[1] == 'desc' ? -1 : 1);
             if(comp != 0) { return comp; }
           }
         }
