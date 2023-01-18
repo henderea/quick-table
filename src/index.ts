@@ -23,7 +23,7 @@ let $: JQueryStatic;
 let _: LoDashStatic;
 
 /* @internal */
-declare interface Map<V> {
+declare interface Dictionary<V> {
   [key: string]: V;
   [key: number]: V;
 }
@@ -235,7 +235,7 @@ const _setFilter = Symbol('setFilter');
 
 export class TypeManager {
   /* @internal */
-  private readonly _types: Map<TypeDefinition> = {};
+  private readonly _types: Dictionary<TypeDefinition> = {};
   /* @internal */
   private constructor() {
     //empty
@@ -339,7 +339,7 @@ export class ColumnId {
 }
 
 /* @internal */
-const columnIds: Map<ColumnId> = {};
+const columnIds: Dictionary<ColumnId> = {};
 
 export function columnId(column: number | ColumnId): ColumnId {
   if(column instanceof ColumnId) { return column; }
@@ -377,7 +377,7 @@ const _getCellId = Symbol('getCellId');
 
 export class RowId {
   /* @internal */
-  private readonly cellIds: Map<CellId> = {};
+  private readonly cellIds: Dictionary<CellId> = {};
   /* @internal */
   private readonly _rowIndex: number;
   /* @internal */
@@ -406,7 +406,7 @@ export class RowId {
 }
 
 /* @internal */
-const rowIds: { head: Map<RowId>, body: Map<RowId> } = {
+const rowIds: { head: Dictionary<RowId>, body: Dictionary<RowId> } = {
   head: {},
   body: {}
 };
@@ -431,14 +431,14 @@ export function cellId(row: number | RowId | CellId, column: number | ColumnId =
 
 export class EventEmitter {
   /* @internal */
-  private readonly _listeners: Map<Listener[]> = {};
+  private readonly _listeners: Dictionary<Listener[]> = {};
   /* @internal */
   protected constructor() {
     //empty
   }
 
   /* @internal */
-  private get listeners(): Map<Listener[]> { return this._listeners; }
+  private get listeners(): Dictionary<Listener[]> { return this._listeners; }
 
   on(event: string, handler: Listener): this {
     if(!this.listeners[event]) { this.listeners[event] = []; }
@@ -597,7 +597,7 @@ export class Cell<T> {
       const d: T = this.quickTable.rawSortedData[this.rowIndex] as T;
       let fieldData: any = null;
       if(def.data) {
-        fieldData = (d as Map<any>)[def.data];
+        fieldData = (d as Dictionary<any>)[def.data];
         return fieldData;
       }
     }
@@ -609,7 +609,7 @@ export class Cell<T> {
       const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
       let fieldData: any = null;
       if(def.data) {
-        fieldData = (d as Map<any>)[def.data];
+        fieldData = (d as Dictionary<any>)[def.data];
       }
       if(typeof def.render == 'function') {
         fieldData = def.render(fieldData, d);
@@ -744,7 +744,7 @@ export class Columns<T> extends QTIterable<Columns<T>, Column<T>> {
 
 export class Row<T> extends EventEmitter {
   /* @internal */
-  private readonly _cells: Map<Cell<T>> = {};
+  private readonly _cells: Dictionary<Cell<T>> = {};
   /* @internal */
   private readonly _quickTable: QuickTable<T>;
   /* @internal */
@@ -907,7 +907,7 @@ function checkFilter<T>(f: RegExp, c: Cell<T> | null, columnDef: ColumnDef<T> | 
 function getCellData<T>(def: ColumnDef<T>, d: T): any {
   let fieldData: any = null;
   if(def.data) {
-    fieldData = (d as Map<any>)[def.data];
+    fieldData = (d as Dictionary<any>)[def.data];
   }
   if(typeof def.render == 'function') {
     fieldData = def.render(fieldData, d);
@@ -921,9 +921,9 @@ export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private readonly _table: JQuery;
   /* @internal */
-  private readonly _columns: Map<Column<T>> = {};
+  private readonly _columns: Dictionary<Column<T>> = {};
   /* @internal */
-  private readonly _rows: Map<Row<T>> = {};
+  private readonly _rows: Dictionary<Row<T>> = {};
   /* @internal */
   private _columnDefs: ColumnDef<T>[] = [];
   /* @internal */
@@ -953,6 +953,8 @@ export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private readonly _filters: RegExp[] = [];
   /* @internal */
+  private _clickHandler: ((this: HTMLTableCellElement, value: any, row: T | string[]) => void) | null = null;
+  /* @internal */
   private constructor(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null) {
     super();
     this._table = $(table);
@@ -973,6 +975,8 @@ export class QuickTable<T> extends EventEmitter {
   set clearOnLoad(clearOnLoad: boolean) { this._clearOnLoad = clearOnLoad; }
   get id(): any { return this._id; }
   set id(id: any) { this._id = id; }
+  get clickHandler(): ((this: HTMLTableCellElement, value: any, row: T | string[]) => void) | null { return this._clickHandler; }
+  set clickHandler(value: ((this: HTMLTableCellElement, value: any, row: T | string[]) => void) | null) { this._clickHandler = value; }
 
   chain(func: (table: this) => void): this {
     func(this);
@@ -1244,9 +1248,15 @@ export class QuickTable<T> extends EventEmitter {
       _.each(this._sortedData, (d) => {
         const $row: JQuery = $('<tr>');
         for(let i = 0; i < colCount; i++) {
-          const $cell: JQuery = $('<td>');
-          $cell.text((d as string[])[i]);
+          const $cell: JQuery<HTMLTableCellElement> = $('<td>');
+          const cellValue: string = (d as string[])[i];
+          $cell.text(cellValue);
           $row.append($cell);
+          if(this.clickHandler) {
+            $cell.on('click', () => {
+              this.clickHandler?.call($cell.get(0) as HTMLTableCellElement, cellValue, d as string[]);
+            });
+          }
         }
         $body.append($row);
       });
@@ -1264,7 +1274,7 @@ export class QuickTable<T> extends EventEmitter {
           }
           let fieldData: any = null;
           if(def.data) {
-            fieldData = (d as Map<any>)[def.data];
+            fieldData = (d as Dictionary<any>)[def.data];
           }
           if(typeof def.render == 'function') {
             fieldData = def.render(fieldData, d);
@@ -1280,6 +1290,11 @@ export class QuickTable<T> extends EventEmitter {
             $cell.addClass(def.cssClass);
           }
           $row.append($cell);
+          if(this.clickHandler) {
+            $cell.on('click', () => {
+              this.clickHandler?.call($cell.get(0) as HTMLTableCellElement, fieldData, d);
+            });
+          }
         }
         $body.append($row);
       });
