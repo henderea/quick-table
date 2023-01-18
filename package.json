@@ -24,8 +24,8 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "yarn build",
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix ."
+    "lint": "eslint src",
+    "lint:fix": "eslint --fix src"
   },
   "files": [
     "lib/**/*"
