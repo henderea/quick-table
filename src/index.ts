@@ -953,7 +953,7 @@ export class QuickTable<T> extends EventEmitter {
   /* @internal */
   private readonly _filters: RegExp[] = [];
   /* @internal */
-  private _clickHandler: ((this: HTMLTableCellElement, value: any, row: T | string[]) => void) | null = null;
+  private _clickHandler: ((this: HTMLTableCellElement, value: any, row: T | string[], index: number) => void) | null = null;
   /* @internal */
   private constructor(table: JQuery, initFunc: ((table: QuickTable<T>) => void) | null = null) {
     super();
@@ -975,8 +975,8 @@ export class QuickTable<T> extends EventEmitter {
   set clearOnLoad(clearOnLoad: boolean) { this._clearOnLoad = clearOnLoad; }
   get id(): any { return this._id; }
   set id(id: any) { this._id = id; }
-  get clickHandler(): ((this: HTMLTableCellElement, value: any, row: T | string[]) => void) | null { return this._clickHandler; }
-  set clickHandler(value: ((this: HTMLTableCellElement, value: any, row: T | string[]) => void) | null) { this._clickHandler = value; }
+  get clickHandler(): ((this: HTMLTableCellElement, value: any, row: T | string[], index: number) => void) | null { return this._clickHandler; }
+  set clickHandler(value: ((this: HTMLTableCellElement, value: any, row: T | string[], index: number) => void) | null) { this._clickHandler = value; }
 
   chain(func: (table: this) => void): this {
     func(this);
@@ -1245,7 +1245,7 @@ export class QuickTable<T> extends EventEmitter {
     const colCount: number = this.columnCount;
     if(!colDefs || colDefs.length == 0) {
       // rows are arrays
-      _.each(this._sortedData, (d) => {
+      _.each(this._sortedData as string[][], (d: string[], index: number) => {
         const $row: JQuery = $('<tr>');
         for(let i = 0; i < colCount; i++) {
           const $cell: JQuery<HTMLTableCellElement> = $('<td>');
@@ -1254,7 +1254,7 @@ export class QuickTable<T> extends EventEmitter {
           $row.append($cell);
           if(this.clickHandler) {
             $cell.on('click', () => {
-              this.clickHandler?.call($cell.get(0) as HTMLTableCellElement, cellValue, d as string[]);
+              this.clickHandler?.call($cell.get(0) as HTMLTableCellElement, cellValue, d as string[], index);
             });
           }
         }
@@ -1262,7 +1262,7 @@ export class QuickTable<T> extends EventEmitter {
       });
     } else {
       // rows use columnDefs
-      _.each(this._sortedData as T[], (d: T) => {
+      _.each(this._sortedData as T[], (d: T, index: number) => {
         const $row = $('<tr>');
         for(let i = 0; i < colCount; i++) {
           const def: ColumnDef<T> = colDefs[i];
@@ -1292,7 +1292,7 @@ export class QuickTable<T> extends EventEmitter {
           $row.append($cell);
           if(this.clickHandler) {
             $cell.on('click', () => {
-              this.clickHandler?.call($cell.get(0) as HTMLTableCellElement, fieldData, d);
+              this.clickHandler?.call($cell.get(0) as HTMLTableCellElement, fieldData, d, index);
             });
           }
         }
