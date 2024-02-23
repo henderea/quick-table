@@ -23,7 +23,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "yarn build",
+    "prepublishOnly": "npm run build",
     "lint": "eslint src",
     "lint:fix": "eslint --fix src"
   },
