@@ -1,5 +1,6 @@
-import { LoDashStatic } from 'lodash';
+import type { LoDashStatic, EmptyObjectOf } from 'lodash';
 
+declare type Func = (...args: any[]) => any | void;
 export declare type Listener = (...args: any[]) => any;
 
 export interface JQueryQuickTable {
@@ -23,22 +24,28 @@ let $: JQueryStatic;
 let _: LoDashStatic;
 
 /* @internal */
-declare interface Dictionary<V> {
-  [key: string]: V;
-  [key: number]: V;
-}
-
-/* @internal */
-declare interface List<V> {
-  readonly length: number;
-  readonly [key: number]: V;
-}
+declare type Dictionary<V> = Record<string | number, V>;
 
 /* @internal */
 declare type Many<T> = T | ReadonlyArray<T>;
 
 /* @internal */
-declare type Unwrappable<T> = T | ((...args: any[]) => T);
+declare type Unwrappable<T> = Exclude<T, Func> | ((...args: any[]) => T);
+
+/* @internal */
+function size(array: any[] | object | string | null | undefined): number {
+  if(_.isNil(array)) { return -1; }
+  return _.size(array);
+}
+
+/* @internal */
+function listNullOrEmpty<T extends Dictionary<any>>(array: any[] | T | null | undefined): array is null | undefined | [] | EmptyObjectOf<T> {
+  return _.isNil(array) || _.isEmpty(array);
+}
+
+function listNotEmpty<T extends Dictionary<any>>(array: any[] | T | null | undefined): array is Exclude<any[] | T, [] | EmptyObjectOf<T>> {
+  return !_.isNil(array) && !_.isEmpty(array);
+}
 
 /* @internal */
 function unwrap<T>(val: Unwrappable<T>, ...params: any[]): T {
@@ -77,7 +84,7 @@ class ParseContext {
 
   get inHtml(): boolean { return this.depth > 0; }
 
-  set<T>(name: string, val: T | ((value: T, context?: this) => T)): this {
+  set<T>(name: string, val: Exclude<T, Func> | ((value: T, context?: this) => T)): this {
     (this._context as any)[name] = unwrap(val, (this._context as any)[name] as T, this);
     return this;
   }
@@ -116,13 +123,13 @@ function subCond(c: string, cond: ParseCondition | ParseConditionInternal, conte
       ((<ParseConditionInternal>cond).act as (context: ParseContext, c?: string) => void)(context, c);
     }
     if(cond.subs) {
-      subCond(c, _.find(_.flatten([cond.subs] as List<Many<ParseConditionInternal>>), (sub) => sub.cond(context, c)) as ParseConditionInternal, context);
+      subCond(c, _.find(_.flatten([cond.subs] as Array<Many<ParseConditionInternal>>), (sub) => sub.cond(context, c)) as ParseConditionInternal, context);
     }
   }
 }
 
 /* @internal */
-function sw(c: string, context: ParseContext, conds: List<ParseCondition>) {
+function sw(c: string, context: ParseContext, conds: Array<ParseCondition>) {
   subCond(c, _.find(conds, (cond) => _.isRegExp(cond.char) ? (<RegExp>cond.char).test(c) : (<string>cond.char).includes(c)) as ParseCondition, context);
 }
 
@@ -131,7 +138,7 @@ function stripHtml(str: string | null | undefined): string {
   if(_.isNil(str)) { return ''; }
   const context: ParseContext = new ParseContext();
 
-  const conds: List<ParseCondition> = [
+  const conds: Array<ParseCondition> = [
     {
       char: '<',
       subs: {
@@ -199,6 +206,11 @@ function stripHtml(str: string | null | undefined): string {
 
 //endregion
 
+/* @internal */
+function nl<T>(value: Exclude<T, undefined> | null | undefined): Exclude<T, undefined> | null {
+  return value ?? null;
+}
+
 export declare interface TypeDefinition {
   preSort?: (data: any) => any;
   preFilter?: (data: any) => string;
@@ -264,17 +276,17 @@ export class TypeManager {
   }
 
   render(type: string | null | undefined, data: any): string {
-    if(_.isNil(type)) { return stringify(data) || ''; }
+    if(_.isNil(type)) { return stringify(data) ?? ''; }
     const typeDef: TypeDefinition | undefined = this._types[type];
     if(!typeDef || !_.isFunction(typeDef.render)) { return stringify(data) || ''; }
     return typeDef.render(data) || '';
   }
 
   matches(type: string | null | undefined, r: RegExp, data: any): boolean {
-    if(_.isNil(type)) { return r.test(stringify(data) || ''); }
+    if(_.isNil(type)) { return r.test(stringify(data) ?? ''); }
     const typeDef: TypeDefinition | undefined = this._types[type];
     if(typeDef && _.isFunction(typeDef.preFilter)) { data = typeDef.preFilter(data); }
-    return r.test(stringify(data) || '');
+    return r.test(stringify(data) ?? '');
   }
 }
 
@@ -447,7 +459,7 @@ export class EventEmitter {
   }
 
   trigger(event: string, ...args: any[]): this {
-    if(this.listeners[event] && this.listeners[event].length > 0) {
+    if(listNotEmpty(this.listeners[event])) {
       _.each(this.listeners[event], (handler: Listener) => {
         handler(...args);
       });
@@ -589,7 +601,7 @@ export class Cell<T> {
   get textData(): string { return this.$.text(); }
   set textData(textData: string) { this.$.text(textData); }
   get data(): any {
-    if(this.quickTable.rawSortedData && this.quickTable.rawSortedData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
+    if(size(this.quickTable.rawSortedData) > this.rowIndex && size(this.quickTable.columnDefs) > this.columnIndex) {
       const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
       if(typeof def.render == 'function') {
         return this.textData;
@@ -604,7 +616,7 @@ export class Cell<T> {
     return this.textData;
   }
   get rawData(): any {
-    if(this.quickTable.rawSortedData && this.quickTable.rawSortedData.length > this.rowIndex && this.quickTable.columnDefs && this.quickTable.columnDefs.length > this.columnIndex) {
+    if(size(this.quickTable.rawSortedData) > this.rowIndex && size(this.quickTable.columnDefs) > this.columnIndex) {
       const d: T = this.quickTable.rawSortedData[this.rowIndex] as T;
       const def: ColumnDef<T> = this.quickTable.columnDefs[this.columnIndex];
       let fieldData: any = null;
@@ -684,7 +696,7 @@ export class Column<T> extends EventEmitter {
     });
   }
 
-  cell(row: number | RowId, isHead: boolean = false): Cell<T> | null { return ((r) => r && r.cell(this.columnId))(this.quickTable.row(row, isHead)); }
+  cell(row: number | RowId, isHead: boolean = false): Cell<T> | null { return nl(this.quickTable.row(row, isHead)?.cell(this.columnId)); }
   headerCell(row: number | RowId): Cell<T> | null { return this.cell(row, true); }
   cellId(row: number | RowId, isHead: boolean = false): CellId { return cellId(row, this.columnId, isHead); }
   get headerCellIds(): CellId[] { return _.map(_.range(this.quickTable.headerRowCount), (r) => this.cellId(r, true)); }
@@ -795,7 +807,7 @@ export class Row<T> extends EventEmitter {
   get cellData(): any[] { return this.cells.data; }
   get cellRawData(): any[] { return this.cells.rawData; }
   get data(): string[] | T {
-    if(this.quickTable.rawSortedData && this.quickTable.rawSortedData.length > this.index) {
+    if(size(this.quickTable.rawSortedData) > this.index) {
       return this.quickTable.rawSortedData[this.index];
     }
     return this.cellHtmlData;
@@ -883,7 +895,7 @@ export class QTWhen<T> {
 function createSearch(search: string, regex: boolean = false, smart: boolean = true, caseInsensitive: boolean = true): RegExp {
   if(!regex) { search = _.escapeRegExp(search); }
   if(smart) {
-    const parts: string[] = _.map(search.match(/"[^"]+"|[^ ]+/g) || [''], (word: string) => {
+    const parts: string[] = _.map(search.match(/"[^"]+"|[^ ]+/g) ?? [''], (word: string) => {
       if(word.charAt(0) === '"') {
         const m: RegExpMatchArray | null = word.match(/^"(.*)"$/);
         word = m ? m[1] : word;
@@ -900,7 +912,7 @@ function createSearch(search: string, regex: boolean = false, smart: boolean = t
 
 /* @internal */
 function checkFilter<T>(f: RegExp, c: Cell<T> | null, columnDef: ColumnDef<T> | null | undefined): boolean {
-  return !f || !c || types.matches(columnDef && columnDef.type, f, c.data);
+  return !f || !c || types.matches(columnDef?.type, f, c.data);
 }
 
 /* @internal */
@@ -915,7 +927,9 @@ function getCellData<T>(def: ColumnDef<T>, d: T): any {
   return fieldData;
 }
 
-export declare type SortDef = [number, 'asc' | 'desc'];
+export declare type SortOrder = 'asc' | 'desc';
+
+export declare type SortDef = [number, SortOrder];
 
 export class QuickTable<T> extends EventEmitter {
   /* @internal */
@@ -986,7 +1000,7 @@ export class QuickTable<T> extends EventEmitter {
   get emptyMessage(): string { return this._emptyMessage; }
   set emptyMessage(value: string) {
     this._emptyMessage = value;
-    if(!this._data || this._data.length == 0) {
+    if(listNullOrEmpty(this._data)) {
       if(this.autoDraw) { this.draw(); }
     }
   }
@@ -994,7 +1008,7 @@ export class QuickTable<T> extends EventEmitter {
   get loadingMessage(): string { return this._loadingMessage; }
   set loadingMessage(value: string) {
     this._loadingMessage = value;
-    if(!this._data || this._data.length == 0) {
+    if(listNullOrEmpty(this._data)) {
       if(this.autoDraw) { this.draw(); }
     }
   }
@@ -1005,7 +1019,7 @@ export class QuickTable<T> extends EventEmitter {
     if(this.clearOnLoad && value) {
       this.data = null;
     }
-    if(!this._data || this._data.length == 0) {
+    if(listNullOrEmpty(this._data)) {
       if(this.autoDraw) { this.draw(); }
     }
   }
@@ -1020,11 +1034,11 @@ export class QuickTable<T> extends EventEmitter {
     if(columnIndex >= this.columnCount) { return this; }
     this._dataSorted = false;
     const existingOrder: SortDef | undefined = _.find(this.sortOrders, (o: SortDef) => o[0] == columnIndex);
-    const newOrder: 'asc' | 'desc' = existingOrder && existingOrder[1] == 'asc' ? 'desc' : 'asc';
+    const newOrder: SortOrder = existingOrder && existingOrder[1] == 'asc' ? 'desc' : 'asc';
     return this.addSort(columnIndex, newOrder);
   }
 
-  addSort(columnIndex: number, order: 'asc' | 'desc' = 'asc'): this {
+  addSort(columnIndex: number, order: SortOrder = 'asc'): this {
     const existingOrderIndex: number = _.findIndex(this.sortOrders, (o: SortDef) => o[0] == columnIndex);
     if(existingOrderIndex == 0 && this.sortOrders[0][1] == order) { return this; }
     this._dataSorted = false;
@@ -1111,7 +1125,7 @@ export class QuickTable<T> extends EventEmitter {
 
   cell(row: number | RowId | CellId, column: number | ColumnId = 0, isHead: boolean = false): Cell<T> | null {
     const cell: CellId = cellId(row, column, isHead);
-    return ((r) => r && r.cell(cell.columnId))(this.row(cell.rowId));
+    return nl(this.row(cell.rowId)?.cell(cell.columnId));
   }
 
   headerCell(row: number | RowId, column: number | ColumnId): Cell<T> | null { return this.cell(row, column, true); }
@@ -1130,7 +1144,7 @@ export class QuickTable<T> extends EventEmitter {
   get rawData(): string[][] | T[] { return this._data; }
   get rawSortedData(): string[][] | T[] { return this._sortedData; }
   get sortedData(): string[][] | T[] | null {
-    if(this._sortedData && this._sortedData.length > 0) {
+    if(listNotEmpty(this._sortedData)) {
       return this._sortedData;
     }
     return this.cellTextData;
@@ -1141,12 +1155,12 @@ export class QuickTable<T> extends EventEmitter {
 
   sortData(forceSort: boolean = false): this {
     if(this._dataSorted && !forceSort) { return this; }
-    if(!this._data || this._data.length == 0) {
+    if(listNullOrEmpty(this._data)) {
       this._sortedData = [];
       return this;
     }
     const colDefs: ColumnDef<T>[] = this.columnDefs;
-    if(!colDefs || colDefs.length == 0) {
+    if(listNullOrEmpty(colDefs)) {
       // rows are arrays
       this._sortedData = _.clone(this._data);
       (this._sortedData as string[][]).sort((a: string[], b: string[]) => {
@@ -1185,7 +1199,7 @@ export class QuickTable<T> extends EventEmitter {
   }
 
   get data(): string[][] | T[] | null {
-    if(this._data && this._data.length > 0) {
+    if(listNotEmpty(this._data)) {
       return this._data;
     }
     return this.cellTextData;
@@ -1193,7 +1207,7 @@ export class QuickTable<T> extends EventEmitter {
 
   set data(data: string[][] | T[] | null) {
     this._dataSorted = false;
-    if(!data || data.length == 0) {
+    if(listNullOrEmpty(data)) {
       this._data = [];
       this.sortData();
       if(this.autoDraw) { this.draw(); }
@@ -1203,12 +1217,12 @@ export class QuickTable<T> extends EventEmitter {
       throw 'data must be an array';
     }
     const colCount: number = this.columnCount;
-    const colDefCount: number = this.columnDefs ? this.columnDefs.length : 0;
-    if(colDefCount == 0) {
+    const colDefCount: number = size(this.columnDefs);
+    if(colDefCount <= 0) {
       if(_.some(data, (d) => !_.isArray(d))) {
         throw 'You must provide the data rows as arrays when columnDefs has not been set';
       }
-      const minSize: number = _.min(_.map(data, (d) => (d as string[]).length)) || 0;
+      const minSize: number = _.min(_.map(data, (d) => size(d as string[]))) ?? 0;
       if(minSize < colCount) {
         throw `One or more data rows had a size below the column count of ${colCount}. Minimum data row size: ${minSize}`;
       }
@@ -1228,7 +1242,7 @@ export class QuickTable<T> extends EventEmitter {
     if(this._inInit) { return this; }
     const $body: JQuery = this.$body;
     $body.empty();
-    if(!this._data || this._data.length == 0) {
+    if(listNullOrEmpty(this._data)) {
       if((this.loading && this.loadingMessage) || this.emptyMessage) {
         const $row: JQuery = $('<tr>');
         const $cell: JQuery = $('<td>');
@@ -1243,7 +1257,7 @@ export class QuickTable<T> extends EventEmitter {
     this.sortData();
     const colDefs: ColumnDef<T>[] = this.columnDefs;
     const colCount: number = this.columnCount;
-    if(!colDefs || colDefs.length == 0) {
+    if(listNullOrEmpty(colDefs)) {
       // rows are arrays
       _.each(this._sortedData as string[][], (d: string[], index: number) => {
         const $row: JQuery = $('<tr>');
