@@ -8,8 +8,8 @@
   "author": "Eric Henderson <henderea@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "@types/jquery": "^3.5.29",
-    "@types/lodash": "^4.14.202",
+    "@types/jquery": "^3.5.30",
+    "@types/lodash": "^4.17.6",
     "@typescript-eslint/eslint-plugin": "^7.15.0",
     "@typescript-eslint/parser": "^7.15.0",
     "eslint": "^8.57.0",
