@@ -10,12 +10,12 @@
   "devDependencies": {
     "@types/jquery": "^3.5.30",
     "@types/lodash": "^4.17.6",
-    "@typescript-eslint/eslint-plugin": "^7.15.0",
-    "@typescript-eslint/parser": "^7.15.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.0",
-    "eslint-config-henderea": "^1.1.47",
+    "eslint-config-henderea": "^1.1.51",
     "eslint-plugin-import": "^2.29.1",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.4"
   },
   "peerDependencies": {
     "jquery": "^3.7.1",
